@@ -291,50 +291,6 @@ const SEED_CONTENT = [
     status: 'draft',
     views: 0,
     userId: 'u_demo1'
-  },
-
-
-  {
-    id: 'c_007',
-    title:
-      'Full Stack Architecture in 2026: Bridging Frontend State and Backend Services',
-
-    category: 'Web Development',
-
-    description:
-      'A deep dive into modern full-stack architecture patterns — connecting frontend state managers to scalable Node.js backend services with type-safe API contracts.',
-
-    content: `
-      <p>Full stack development in 2026 demands a coherent architectural vision that keeps both sides of the stack coordinated and maintainable.</p>
-
-      <h2>The State Management Challenge</h2>
-      <p>Modern frontends manage increasingly complex state involving server state, UI state, form state, and cache state.</p>
-
-      <h2>Type-Safe API Contracts</h2>
-      <p>End-to-end type safety helps ensure that frontend and backend data contracts remain consistent.</p>
-
-      <h2>Backend Service Patterns</h2>
-      <p>Node.js continues to be a powerful platform for building modern backend services.</p>
-    `,
-
-    tags: [
-      'full stack',
-      'architecture',
-      'react',
-      'nodejs',
-      'api',
-      'typescript'
-    ],
-
-    image:
-      'assets/images/article-fullstack-2026.jpg',
-
-    author: 'Alex Morgan',
-    authorInitials: 'AM',
-    date: '2026-10-03',
-    status: 'published',
-    views: 2780,
-    userId: 'u_demo1'
   }
 ];
 
@@ -350,7 +306,6 @@ const BLOGCRAFT_IMAGES = [
   'assets/images/article-webdev.jpg',
   'assets/images/article-cloud.jpg',
   'assets/images/article-design-system.svg',
-  'assets/images/article-fullstack-2026.jpg',
   'assets/images/article-javascript-backend.jpg',
   'assets/images/article-backend-api.jpg',
   'assets/images/article-fullstack-dev.jpg'
@@ -365,6 +320,30 @@ const BLOGCRAFT_IMAGES = [
 const BROKEN_IMAGES = new Set([
   'assets/images/article-js.jpg'
 ]);
+
+
+/*
+ * Articles that have been permanently removed.
+ * Filtered out from all content sources —
+ * including any stale localStorage cache —
+ * so they never surface in the UI again.
+ */
+const REMOVED_ARTICLE_IDS = new Set([
+  'c_007'
+]);
+
+const REMOVED_ARTICLE_TITLES = new Set([
+  'full stack architecture in 2026: bridging frontend state and backend services'
+]);
+
+function isRemovedArticle(article) {
+  return (
+    REMOVED_ARTICLE_IDS.has(String(article.id || '')) ||
+    REMOVED_ARTICLE_TITLES.has(
+      String(article.title || '').trim().toLowerCase()
+    )
+  );
+}
 
 
 function createUniqueImage(title, usedImages) {
@@ -416,16 +395,6 @@ function createUniqueImage(title, usedImages) {
     if (!usedImages.has(image)) return image;
   }
 
-
-  if (
-    name.includes('full stack architecture') ||
-    name.includes('full-stack architecture') ||
-    name.includes('bridging frontend')
-  ) {
-    // The c_007 seed article keeps the 2026 image
-    const image = 'assets/images/article-fullstack-2026.jpg';
-    if (!usedImages.has(image)) return image;
-  }
 
 
   // ── Backend / MongoDB article mappings ───────────────────
@@ -671,22 +640,42 @@ function getAllLocalContent() {
         return a;
       });
 
-      Storage.setContent(sanitized);
+      /*
+       * Also purge any removed articles that may
+       * have been cached in a previous session.
+       */
+      const purged =
+        sanitized.filter(a => !isRemovedArticle(a));
 
-      return sanitized;
+      Storage.setContent(purged);
+
+      return purged;
     }
 
-    return stored;
+
+    /*
+     * Purge any removed articles from the
+     * cached localStorage array.
+     */
+    const purged =
+      stored.filter(a => !isRemovedArticle(a));
+
+    if (purged.length !== stored.length) {
+      Storage.setContent(purged);
+    }
+
+    return purged;
   }
 
 
-  Storage.setContent(
-    SEED_CONTENT
-  );
+  const cleanSeed =
+    SEED_CONTENT.filter(a => !isRemovedArticle(a));
+
+  Storage.setContent(cleanSeed);
 
 
   return [
-    ...SEED_CONTENT
+    ...cleanSeed
   ];
 }
 
