@@ -15,76 +15,35 @@ const DASHBOARD_API_BASE_URL = 'http://localhost:5000/api';
 
 async function initDashboard() {
 
-  if (
-    !document.getElementById(
-      'dashboardPage'
-    )
-  ) {
+  if (!document.getElementById('dashboardPage')) {
     return;
   }
 
-
-  const user =
-    requireAuth(
-      'login.html'
-    );
-
+  const user = requireAuth('login.html');
 
   if (!user) {
     return;
   }
 
+  // User information
+  document.querySelectorAll('.user-name').forEach(el => {
+    el.textContent = user.name;
+  });
 
-  /*
-   * User information
-   */
-  document
-    .querySelectorAll(
-      '.user-name'
-    )
-    .forEach(
-      el =>
-        el.textContent =
-        user.name
-    );
+  document.querySelectorAll('.user-initials').forEach(el => {
+    el.textContent = user.initials || 'U';
+  });
 
+  document.querySelectorAll('.user-email').forEach(el => {
+    el.textContent = user.email;
+  });
 
-  document
-    .querySelectorAll(
-      '.user-initials'
-    )
-    .forEach(
-      el =>
-        el.textContent =
-        user.initials || 'U'
-    );
-
-
-  document
-    .querySelectorAll(
-      '.user-email'
-    )
-    .forEach(
-      el =>
-        el.textContent =
-        user.email
-    );
-
-
-  /*
-   * Greeting
-   */
-  const greeting =
-    document.getElementById(
-      'dashGreeting'
-    );
-
+  // Greeting
+  const greeting = document.getElementById('dashGreeting');
 
   if (greeting) {
 
-    const hour =
-      new Date().getHours();
-
+    const hour = new Date().getHours();
 
     const time =
       hour < 12
@@ -93,28 +52,18 @@ async function initDashboard() {
           ? 'Afternoon'
           : 'Evening';
 
-
     greeting.innerHTML =
-      `Good ${time}, <strong>${user.name.split(' ')[0]
-      }</strong> 👋`;
+      `Good ${time}, <strong>${user.name.split(' ')[0]}</strong> 👋`;
   }
 
-
-  /*
-   * IMPORTANT:
-   * Wait for MongoDB + local articles
-   * before rendering dashboard.
-   */
+  // Load backend content before rendering
   try {
 
     if (
       window.ContentDB &&
-      typeof ContentDB.refreshBackendContent ===
-      'function'
+      typeof ContentDB.refreshBackendContent === 'function'
     ) {
-
       await ContentDB.refreshBackendContent();
-
     }
 
   } catch (error) {
@@ -123,17 +72,10 @@ async function initDashboard() {
       'Dashboard content loading failed:',
       error
     );
-
   }
 
-
-  /*
-   * Now render dashboard.
-   */
   loadStats();
-
   loadContentTable();
-
   initSidebar();
 }
 
@@ -144,86 +86,38 @@ async function initDashboard() {
 
 function loadStats() {
 
-  const all =
-    ContentDB.getAllContent();
+  const all = ContentDB.getAllContent();
 
+  // For the internship dashboard, show all BlogCraft articles
+  const myContent = all.filter(() => true);
 
-  /*
-   * For the internship dashboard,
-   * show all BlogCraft articles.
-   */
-  const myContent =
-    all.filter(
-      () => true
-    );
-
-
-  const published =
-    myContent.filter(
-      article =>
-        article.status ===
-        'published'
-    );
-
-
-  const drafts =
-    myContent.filter(
-      article =>
-        article.status ===
-        'draft'
-    );
-
-
-  const views =
-    myContent.reduce(
-      (sum, article) =>
-        sum +
-        Number(
-          article.views || 0
-        ),
-      0
-    );
-
-
-  setValue(
-    'statTotal',
-    myContent.length
+  const published = myContent.filter(
+    article => article.status === 'published'
   );
 
-
-  setValue(
-    'statPublished',
-    published.length
+  const drafts = myContent.filter(
+    article => article.status === 'draft'
   );
 
-
-  setValue(
-    'statDrafts',
-    drafts.length
+  const views = myContent.reduce(
+    (sum, article) =>
+      sum + Number(article.views || 0),
+    0
   );
 
-
-  setValue(
-    'statViews',
-    views.toLocaleString()
-  );
+  setValue('statTotal', myContent.length);
+  setValue('statPublished', published.length);
+  setValue('statDrafts', drafts.length);
+  setValue('statViews', views.toLocaleString());
 }
 
 
-function setValue(
-  id,
-  value
-) {
+function setValue(id, value) {
 
-  const el =
-    document.getElementById(
-      id
-    );
-
+  const el = document.getElementById(id);
 
   if (el) {
-    el.textContent =
-      value;
+    el.textContent = value;
   }
 }
 
@@ -234,224 +128,188 @@ function setValue(
 
 function loadContentTable() {
 
-  const tbody =
-    document.getElementById(
-      'contentTableBody'
-    );
-
+  const tbody = document.getElementById('contentTableBody');
 
   if (!tbody) {
     return;
   }
 
-
-  const all =
-    ContentDB.getAllContent();
-
+  const all = ContentDB.getAllContent();
 
   console.log(
     'BlogCraft dashboard articles:',
     all.length
   );
 
-
-  if (
-    all.length === 0
-  ) {
+  if (all.length === 0) {
 
     tbody.innerHTML = `
+            <tr>
+                <td
+                    colspan="5"
+                    style="
+                        text-align:center;
+                        padding:32px;
+                        color:var(--text-muted);
+                    "
+                >
+                    No content yet.
 
-      <tr>
-
-        <td
-          colspan="5"
-          style="
-            text-align:center;
-            padding:32px;
-            color:var(--text-muted);
-          "
-        >
-
-          No content yet.
-
-          <a href="create.html">
-            Create your first article →
-          </a>
-
-        </td>
-
-      </tr>
-
-    `;
+                    <a href="create.html">
+                        Create your first article →
+                    </a>
+                </td>
+            </tr>
+        `;
 
     return;
   }
 
-
   tbody.innerHTML =
     all
-      .map(
-        item => {
+      .map(item => {
 
-          const dateStr =
-            item.date
-              ? new Date(
-                item.date
-              ).toLocaleDateString(
-                'en-US',
-                {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric'
-                }
-              )
-              : '—';
+        const dateStr =
+          item.date
+            ? new Date(item.date).toLocaleDateString(
+              'en-US',
+              {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+              }
+            )
+            : '—';
 
+        const badge =
+          item.status === 'published'
 
-          const badge =
-            item.status ===
-              'published'
+            ? `
+                            <span class="badge badge-published">
+                                Published
+                            </span>
+                        `
 
-              ? `
-                <span
-                  class="badge badge-published"
-                >
-                  Published
-                </span>
-              `
+            : `
+                            <span class="badge badge-draft">
+                                Draft
+                            </span>
+                        `;
 
-              : `
-                <span
-                  class="badge badge-draft"
-                >
-                  Draft
-                </span>
-              `;
+        return `
+                    <tr>
 
+                        <td data-label="Title">
 
-          return `
+                            <span class="table-title">
+                                ${escapeHtml(item.title)}
+                            </span>
 
-            <tr>
-
-              <td data-label="Title">
-
-                <span
-                  class="table-title"
-                >
-                  ${item.title}
-                </span>
-
-              </td>
+                        </td>
 
 
-              <td data-label="Category">
+                        <td data-label="Category">
 
-                <span
-                  class="badge badge-tech"
-                >
-                  ${item.category || 'General'}
-                </span>
+                            <span class="badge badge-tech">
+                                ${escapeHtml(item.category || 'General')}
+                            </span>
 
-              </td>
+                        </td>
 
 
-              <td data-label="Status">
+                        <td data-label="Status">
 
-                ${badge}
+                            ${badge}
 
-              </td>
-
-
-              <td data-label="Date">
-
-                ${dateStr}
-
-              </td>
+                        </td>
 
 
-              <td data-label="Actions">
+                        <td data-label="Date">
 
-                <div
-                  class="table-actions"
-                >
+                            ${dateStr}
 
-                  <a
-                    href="details.html?id=${item.id}"
-                    class="btn btn-sm btn-outline-accent"
-                    aria-label="View ${item.title}"
-                  >
-                    View
-                  </a>
+                        </td>
 
 
-                  <a
-                    href="create.html?id=${item.id}"
-                    class="btn btn-sm btn-secondary"
-                    aria-label="Edit ${item.title}"
-                  >
-                    Edit
-                  </a>
+                        <td data-label="Actions">
+
+                            <div class="table-actions">
+
+                                <a
+                                    href="details.html?id=${encodeURIComponent(item.id)}"
+                                    class="btn btn-sm btn-outline-accent"
+                                    aria-label="View ${escapeHtml(item.title)}"
+                                >
+                                    View
+                                </a>
 
 
-                  <button
-                    class="btn btn-sm btn-danger"
-                    data-delete="${item.id}"
-                    aria-label="Delete ${item.title}"
-                  >
-                    Delete
-                  </button>
+                                <a
+                                    href="create.html?id=${encodeURIComponent(item.id)}"
+                                    class="btn btn-sm btn-secondary"
+                                    aria-label="Edit ${escapeHtml(item.title)}"
+                                >
+                                    Edit
+                                </a>
 
-                </div>
 
-              </td>
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-danger"
+                                    data-delete="${escapeHtml(item.id)}"
+                                    aria-label="Delete ${escapeHtml(item.title)}"
+                                >
+                                    Delete
+                                </button>
 
-            </tr>
+                            </div>
 
-          `;
-        }
-      )
+                        </td>
+
+                    </tr>
+                `;
+      })
       .join('');
 
-
-  /*
-   * Delete handlers
-   */
+  // Delete handlers
   tbody
-    .querySelectorAll(
-      '[data-delete]'
-    )
-    .forEach(
-      button => {
+    .querySelectorAll('[data-delete]')
+    .forEach(button => {
 
-        button.addEventListener(
-          'click',
-          () => {
+      button.addEventListener(
+        'click',
+        () => {
 
-            const row =
-              button.closest(
-                'tr'
-              );
+          const row = button.closest('tr');
+
+          const title =
+            row
+              ?.querySelector('.table-title')
+              ?.textContent
+              ?.trim();
+
+          confirmDelete(
+            button.dataset.delete,
+            title
+          );
+        }
+      );
+    });
+}
 
 
-            const title =
-              row
-                ?.querySelector(
-                  '.table-title'
-                )
-                ?.textContent
-                ?.trim();
+// ══════════════════════════════════════════════════════════════════════════════
+// HTML ESCAPE
+// ══════════════════════════════════════════════════════════════════════════════
 
+function escapeHtml(value) {
 
-            confirmDelete(
-              button.dataset.delete,
-              title
-            );
-
-          }
-        );
-
-      }
-    );
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 
@@ -459,86 +317,153 @@ function loadContentTable() {
 // DELETE
 // ══════════════════════════════════════════════════════════════════════════════
 
-function confirmDelete(
-  id,
-  title
-) {
+function confirmDelete(id, title) {
 
   const overlay =
-    document.getElementById(
-      'deleteModal'
-    );
-
+    document.getElementById('deleteModal');
 
   const titleEl =
-    document.getElementById(
-      'deleteModalTitle'
-    );
-
+    document.getElementById('deleteModalTitle');
 
   if (titleEl) {
-
     titleEl.textContent =
-      title ||
-      'this article';
+      title || 'this article';
   }
-
 
   if (
-    typeof Modal !==
-    'undefined'
+    typeof Modal !== 'undefined' &&
+    overlay
   ) {
-
-    Modal.open(
-      overlay
-    );
+    Modal.open(overlay);
   }
-
 
   const confirmButton =
-    document.getElementById(
-      'confirmDeleteBtn'
-    );
+    document.getElementById('confirmDeleteBtn');
 
+  if (!confirmButton) {
+    return;
+  }
 
-  if (confirmButton) {
+  // Prevent multiple handlers
+  confirmButton.onclick = async () => {
 
-    confirmButton.onclick =
-      () => {
+    const token =
+      localStorage.getItem('blogcraftToken');
 
-        ContentDB.deleteContent(
-          id
+    if (!token) {
+
+      Toast?.show?.(
+        'Please login again to continue.',
+        'error'
+      );
+
+      return;
+    }
+
+    try {
+
+      confirmButton.disabled = true;
+      confirmButton.textContent = 'Deleting...';
+
+      const response =
+        await fetch(
+          `${DASHBOARD_API_BASE_URL}/blogs/${encodeURIComponent(id)}`,
+          {
+            method: 'DELETE',
+
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
         );
 
+      const data =
+        await response.json();
+
+      // Authentication error
+      if (
+        response.status === 401 ||
+        response.status === 403
+      ) {
+
+        localStorage.removeItem('blogcraftToken');
+
+        Toast?.show?.(
+          'Your session has expired. Please login again.',
+          'error',
+          5000
+        );
 
         if (
-          typeof Modal !==
-          'undefined'
+          typeof Modal !== 'undefined' &&
+          overlay
         ) {
-
-          Modal.close(
-            overlay
-          );
+          Modal.close(overlay);
         }
 
+        setTimeout(() => {
+          window.location.href = 'login.html';
+        }, 1000);
 
-        if (
-          typeof Toast !==
-          'undefined'
-        ) {
+        return;
+      }
 
-          Toast.show(
-            'Article deleted successfully.',
-            'success'
-          );
-        }
+      // Backend error
+      if (!response.ok) {
 
+        Toast?.show?.(
+          data.message ||
+          'Failed to delete article.',
+          'error',
+          5000
+        );
 
-        loadStats();
+        return;
+      }
 
-        loadContentTable();
-      };
-  }
+      // Remove from local cache after backend succeeds
+      if (
+        window.ContentDB &&
+        typeof ContentDB.deleteContent === 'function'
+      ) {
+        ContentDB.deleteContent(id);
+      }
+
+      if (
+        typeof Modal !== 'undefined' &&
+        overlay
+      ) {
+        Modal.close(overlay);
+      }
+
+      Toast?.show?.(
+        data.message ||
+        'Article deleted successfully.',
+        'success'
+      );
+
+      loadStats();
+      loadContentTable();
+
+    } catch (error) {
+
+      console.error(
+        'Delete Blog API error:',
+        error
+      );
+
+      Toast?.show?.(
+        'Unable to connect to the backend. Make sure the server is running.',
+        'error',
+        5000
+      );
+
+    } finally {
+
+      confirmButton.disabled = false;
+      confirmButton.textContent = 'Delete';
+    }
+  };
 }
 
 
@@ -549,60 +474,35 @@ function confirmDelete(
 function initSidebar() {
 
   const toggle =
-    document.getElementById(
-      'sidebarToggle'
-    );
-
+    document.getElementById('sidebarToggle');
 
   const sidebar =
-    document.getElementById(
-      'sidebar'
-    );
-
+    document.getElementById('sidebar');
 
   const overlay =
-    document.getElementById(
-      'sidebarOverlay'
-    );
-
+    document.getElementById('sidebarOverlay');
 
   const closeBtn =
-    document.getElementById(
-      'sidebarClose'
-    );
+    document.getElementById('sidebarClose');
 
 
   function openSidebar() {
 
-    sidebar?.classList.add(
-      'open'
-    );
+    sidebar?.classList.add('open');
 
+    overlay?.classList.add('open');
 
-    overlay?.classList.add(
-      'open'
-    );
-
-
-    document.body.style.overflow =
-      'hidden';
+    document.body.style.overflow = 'hidden';
   }
 
 
   function closeSidebar() {
 
-    sidebar?.classList.remove(
-      'open'
-    );
+    sidebar?.classList.remove('open');
 
+    overlay?.classList.remove('open');
 
-    overlay?.classList.remove(
-      'open'
-    );
-
-
-    document.body.style.overflow =
-      '';
+    document.body.style.overflow = '';
   }
 
 
@@ -624,30 +524,21 @@ function initSidebar() {
   );
 
 
-  /*
-   * Active sidebar link
-   */
+  // Active sidebar link
   const current =
     location.pathname
       .split('/')
       .pop();
 
-
   document
-    .querySelectorAll(
-      '.sidebar-link[data-page]'
-    )
-    .forEach(
-      link => {
+    .querySelectorAll('.sidebar-link[data-page]')
+    .forEach(link => {
 
-        link.classList.toggle(
-          'active',
-          link.dataset.page ===
-          current
-        );
-
-      }
-    );
+      link.classList.toggle(
+        'active',
+        link.dataset.page === current
+      );
+    });
 }
 
 
@@ -657,52 +548,32 @@ function initSidebar() {
 
 function initCreatePage() {
 
-  if (
-    !document.getElementById(
-      'createPage'
-    )
-  ) {
+  if (!document.getElementById('createPage')) {
     return;
   }
 
-
   const user =
-    requireAuth(
-      'login.html'
-    );
-
+    requireAuth('login.html');
 
   if (!user) {
     return;
   }
 
-
   const params =
-    new URLSearchParams(
-      location.search
-    );
-
+    new URLSearchParams(location.search);
 
   const editId =
     params.get('id');
 
-
   const existing =
     editId
-      ? ContentDB.getById(
-        editId
-      )
+      ? ContentDB.getById(editId)
       : null;
 
 
-  /*
-   * Heading
-   */
+  // Heading
   const pageHeading =
-    document.getElementById(
-      'createHeading'
-    );
-
+    document.getElementById('createHeading');
 
   if (pageHeading) {
 
@@ -713,139 +584,85 @@ function initCreatePage() {
   }
 
 
-  /*
-   * Form elements
-   */
+  // Form elements
   const form =
-    document.getElementById(
-      'createForm'
-    );
-
+    document.getElementById('createForm');
 
   const titleIn =
-    document.getElementById(
-      'artTitle'
-    );
-
+    document.getElementById('artTitle');
 
   const categoryIn =
-    document.getElementById(
-      'artCategory'
-    );
-
+    document.getElementById('artCategory');
 
   const descIn =
-    document.getElementById(
-      'artDesc'
-    );
-
+    document.getElementById('artDesc');
 
   const contentIn =
-    document.getElementById(
-      'artContent'
-    );
-
+    document.getElementById('artContent');
 
   const statusIn =
-    document.getElementById(
-      'artStatus'
-    );
-
+    document.getElementById('artStatus');
 
   const tagsWrap =
-    document.getElementById(
-      'tagsWrap'
-    );
-
+    document.getElementById('tagsWrap');
 
   const charCount =
-    document.getElementById(
-      'descCharCount'
-    );
-
+    document.getElementById('descCharCount');
 
   const imgArea =
-    document.getElementById(
-      'imageUploadArea'
-    );
-
+    document.getElementById('imageUploadArea');
 
   const imgInput =
-    document.getElementById(
-      'imageInput'
-    );
-
+    document.getElementById('imageInput');
 
   const imgPreview =
-    document.getElementById(
-      'imagePreview'
-    );
-
+    document.getElementById('imagePreview');
 
   const previewImg =
-    document.getElementById(
-      'previewImg'
-    );
-
+    document.getElementById('previewImg');
 
   const removeImgBtn =
-    document.getElementById(
-      'removeImgBtn'
-    );
-
+    document.getElementById('removeImgBtn');
 
   const saveDraftBtn =
-    document.getElementById(
-      'saveDraftBtn'
-    );
-
+    document.getElementById('saveDraftBtn');
 
   const publishBtn =
-    document.getElementById(
-      'publishBtn'
-    );
+    document.getElementById('publishBtn');
 
 
   let tags = [];
 
-
-  let imageBase64 =
-    null;
+  let imageBase64 = null;
 
 
-  /*
-   * Populate edit form
-   */
+  // ══════════════════════════════════════════════════════════════════════════
+  // POPULATE EDIT FORM
+  // ══════════════════════════════════════════════════════════════════════════
+
   if (existing) {
 
     if (titleIn) {
       titleIn.value =
-        existing.title;
+        existing.title || '';
     }
-
 
     if (categoryIn) {
       categoryIn.value =
-        existing.category;
+        existing.category || '';
     }
-
 
     if (descIn) {
       descIn.value =
         existing.description || '';
     }
 
-
     if (contentIn) {
 
       contentIn.value =
         existing.content
-          ?.replace(
-            /<[^>]+>/g,
-            ''
-          ) || '';
+          ?.replace(/<[^>]+>/g, '') || '';
     }
-
 
     if (statusIn) {
 
@@ -854,23 +671,16 @@ function initCreatePage() {
         'published';
     }
 
-
-    tags =
-      [
-        ...(existing.tags || [])
-      ];
-
+    tags = [
+      ...(existing.tags || [])
+    ];
 
     if (existing.image) {
 
-      showPreview(
-        existing.image
-      );
+      showPreview(existing.image);
 
       if (
-        existing.image.startsWith(
-          'data:image/'
-        )
+        existing.image.startsWith('data:image/')
       ) {
 
         imageBase64 =
@@ -878,33 +688,27 @@ function initCreatePage() {
       }
     }
 
-
     renderTags();
 
     updateCharCount();
   }
 
 
-  /*
-   * Character count
-   */
+  // ══════════════════════════════════════════════════════════════════════════
+  // CHARACTER COUNT
+  // ══════════════════════════════════════════════════════════════════════════
+
   function updateCharCount() {
 
-    if (
-      !descIn ||
-      !charCount
-    ) {
+    if (!descIn || !charCount) {
       return;
     }
-
 
     const len =
       descIn.value.length;
 
-
     charCount.textContent =
       `${len}/200`;
-
 
     charCount.className =
       'char-counter' +
@@ -924,39 +728,36 @@ function initCreatePage() {
   );
 
 
-  /*
-   * Tags
-   */
+  // ══════════════════════════════════════════════════════════════════════════
+  // TAGS
+  // ══════════════════════════════════════════════════════════════════════════
+
   function renderTags() {
 
     if (!tagsWrap) {
       return;
     }
 
-
     const chips =
       tags
-        .map(
-          tag => `
+        .map(tag => `
 
-            <span
-              class="tag-chip"
-            >
+                    <span class="tag-chip">
 
-              ${tag}
+                        ${escapeHtml(tag)}
 
-              <button
-                type="button"
-                class="tag-chip-remove"
-                data-tag="${tag}"
-                aria-label="Remove tag ${tag}"
-              >
-                ×
-              </button>
+                        <button
+                            type="button"
+                            class="tag-chip-remove"
+                            data-tag="${escapeHtml(tag)}"
+                            aria-label="Remove tag ${escapeHtml(tag)}"
+                        >
+                            ×
+                        </button>
 
-            </span>
-          `
-        )
+                    </span>
+
+                `)
         .join('');
 
 
@@ -964,51 +765,43 @@ function initCreatePage() {
       chips +
       `
 
-        <input
-          type="text"
-          class="tags-input-field"
-          id="tagsField"
-          placeholder="${tags.length
+                <input
+                    type="text"
+                    class="tags-input-field"
+                    id="tagsField"
+                    placeholder="${tags.length
         ? ''
         : 'Add tags (Enter)'
       }"
-          aria-label="Add tag"
-        >
+                    aria-label="Add tag"
+                >
 
-      `;
+            `;
 
 
     tagsWrap
-      .querySelectorAll(
-        '.tag-chip-remove'
-      )
-      .forEach(
-        button => {
+      .querySelectorAll('.tag-chip-remove')
+      .forEach(button => {
 
-          button.addEventListener(
-            'click',
-            () => {
+        button.addEventListener(
+          'click',
+          () => {
 
-              tags =
-                tags.filter(
-                  tag =>
-                    tag !==
-                    button.dataset.tag
-                );
+            tags =
+              tags.filter(
+                tag =>
+                  tag !==
+                  button.dataset.tag
+              );
 
-
-              renderTags();
-            }
-          );
-
-        }
-      );
+            renderTags();
+          }
+        );
+      });
 
 
     const field =
-      document.getElementById(
-        'tagsField'
-      );
+      document.getElementById('tagsField');
 
 
     field?.addEventListener(
@@ -1017,8 +810,7 @@ function initCreatePage() {
 
         if (
           (
-            event.key ===
-            'Enter' ||
+            event.key === 'Enter' ||
             event.key === ','
           ) &&
           field.value.trim()
@@ -1026,14 +818,10 @@ function initCreatePage() {
 
           event.preventDefault();
 
-
           const tag =
             field.value
               .trim()
-              .replace(
-                /,/g,
-                ''
-              )
+              .replace(/,/g, '')
               .toLowerCase();
 
 
@@ -1043,10 +831,7 @@ function initCreatePage() {
             tags.length < 8
           ) {
 
-            tags.push(
-              tag
-            );
-
+            tags.push(tag);
 
             renderTags();
           }
@@ -1059,31 +844,22 @@ function initCreatePage() {
   renderTags();
 
 
-  /*
-   * Image preview
-   */
-  function showPreview(
-    src
-  ) {
+  // ══════════════════════════════════════════════════════════════════════════
+  // IMAGE PREVIEW
+  // ══════════════════════════════════════════════════════════════════════════
+
+  function showPreview(src) {
 
     if (imgArea) {
-
-      imgArea.style.display =
-        'none';
+      imgArea.style.display = 'none';
     }
-
 
     if (imgPreview) {
-
-      imgPreview.style.display =
-        '';
+      imgPreview.style.display = '';
     }
 
-
     if (previewImg) {
-
-      previewImg.src =
-        src;
+      previewImg.src = src;
     }
   }
 
@@ -1091,35 +867,24 @@ function initCreatePage() {
   function hidePreview() {
 
     if (imgArea) {
-
-      imgArea.style.display =
-        '';
+      imgArea.style.display = '';
     }
-
 
     if (imgPreview) {
-
-      imgPreview.style.display =
-        'none';
+      imgPreview.style.display = 'none';
     }
 
-
-    imageBase64 =
-      null;
-
+    imageBase64 = null;
 
     if (previewImg) {
-
-      previewImg.src =
-        '';
+      previewImg.src = '';
     }
   }
 
 
   imgArea?.addEventListener(
     'click',
-    () =>
-      imgInput?.click()
+    () => imgInput?.click()
   );
 
 
@@ -1129,9 +894,7 @@ function initCreatePage() {
 
       event.preventDefault();
 
-      imgArea.classList.add(
-        'drag-over'
-      );
+      imgArea.classList.add('drag-over');
     }
   );
 
@@ -1140,9 +903,7 @@ function initCreatePage() {
     'dragleave',
     () => {
 
-      imgArea.classList.remove(
-        'drag-over'
-      );
+      imgArea.classList.remove('drag-over');
     }
   );
 
@@ -1153,26 +914,17 @@ function initCreatePage() {
 
       event.preventDefault();
 
-      imgArea.classList.remove(
-        'drag-over'
-      );
-
+      imgArea.classList.remove('drag-over');
 
       const file =
-        event.dataTransfer
-          .files[0];
-
+        event.dataTransfer.files[0];
 
       if (
         file &&
-        file.type.startsWith(
-          'image/'
-        )
+        file.type.startsWith('image/')
       ) {
 
-        handleFile(
-          file
-        );
+        handleFile(file);
       }
     }
   );
@@ -1182,9 +934,7 @@ function initCreatePage() {
     'change',
     () => {
 
-      if (
-        imgInput.files[0]
-      ) {
+      if (imgInput.files[0]) {
 
         handleFile(
           imgInput.files[0]
@@ -1200,16 +950,14 @@ function initCreatePage() {
   );
 
 
-  function handleFile(
-    file
-  ) {
+  function handleFile(file) {
 
     if (
       file.size >
       4 * 1024 * 1024
     ) {
 
-      Toast.show(
+      Toast?.show?.(
         'Image must be under 4MB.',
         'error'
       );
@@ -1228,30 +976,26 @@ function initCreatePage() {
         imageBase64 =
           event.target.result;
 
-
         showPreview(
           imageBase64
         );
       };
 
 
-    reader.readAsDataURL(
-      file
-    );
+    reader.readAsDataURL(file);
   }
 
 
-  /*
-   * Validation
-   */
+  // ══════════════════════════════════════════════════════════════════════════
+  // VALIDATION
+  // ══════════════════════════════════════════════════════════════════════════
+
   function validate() {
 
     let valid = true;
 
 
-    if (
-      !titleIn?.value.trim()
-    ) {
+    if (!titleIn?.value.trim()) {
 
       showErr(
         titleIn,
@@ -1270,9 +1014,7 @@ function initCreatePage() {
     }
 
 
-    if (
-      !categoryIn?.value
-    ) {
+    if (!categoryIn?.value) {
 
       showErr(
         categoryIn,
@@ -1291,9 +1033,7 @@ function initCreatePage() {
     }
 
 
-    if (
-      !descIn?.value.trim()
-    ) {
+    if (!descIn?.value.trim()) {
 
       showErr(
         descIn,
@@ -1312,6 +1052,21 @@ function initCreatePage() {
     }
 
 
+    if (
+      descIn?.value.length >
+      200
+    ) {
+
+      showErr(
+        descIn,
+        'descError',
+        'Description must be 200 characters or less.'
+      );
+
+      valid = false;
+    }
+
+
     return valid;
   }
 
@@ -1322,26 +1077,17 @@ function initCreatePage() {
     message
   ) {
 
-    el?.classList.add(
-      'error'
-    );
-
+    el?.classList.add('error');
 
     const errorEl =
-      document.getElementById(
-        errId
-      );
-
+      document.getElementById(errId);
 
     if (errorEl) {
 
       errorEl.textContent =
         message;
 
-
-      errorEl.classList.add(
-        'visible'
-      );
+      errorEl.classList.add('visible');
     }
   }
 
@@ -1351,33 +1097,23 @@ function initCreatePage() {
     errId
   ) {
 
-    el?.classList.remove(
-      'error'
-    );
-
+    el?.classList.remove('error');
 
     const errorEl =
-      document.getElementById(
-        errId
-      );
-
+      document.getElementById(errId);
 
     if (errorEl) {
 
-      errorEl.classList.remove(
-        'visible'
-      );
+      errorEl.classList.remove('visible');
     }
   }
 
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // SAVE BLOG
-  // ════════════════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════════
+  // SAVE BLOG — CREATE + UPDATE
+  // ══════════════════════════════════════════════════════════════════════════
 
-  async function save(
-    status
-  ) {
+  async function save(status) {
 
     if (!validate()) {
       return;
@@ -1385,37 +1121,30 @@ function initCreatePage() {
 
 
     const token =
-      localStorage.getItem(
-        'blogcraftToken'
-      );
+      localStorage.getItem('blogcraftToken');
 
 
     if (!token) {
 
-      Toast.show(
+      Toast?.show?.(
         'Please login again to continue.',
         'error'
       );
 
-
       setTimeout(
         () => {
-
           window.location.href =
             'login.html';
-
         },
         1000
       );
-
 
       return;
     }
 
 
     const rawContent =
-      contentIn?.value.trim() ||
-      '';
+      contentIn?.value.trim() || '';
 
 
     const content =
@@ -1433,9 +1162,7 @@ function initCreatePage() {
         .join('\n');
 
 
-    /*
-     * Image
-     */
+    // Image
     const image =
       imageBase64 ||
       existing?.image ||
@@ -1456,56 +1183,79 @@ function initCreatePage() {
 
       image:
         image
-
     };
 
 
-    /*
-     * Disable buttons
-     */
+    // Disable buttons
     if (saveDraftBtn) {
-
-      saveDraftBtn.disabled =
-        true;
+      saveDraftBtn.disabled = true;
     }
-
 
     if (publishBtn) {
-
-      publishBtn.disabled =
-        true;
+      publishBtn.disabled = true;
     }
 
 
-    if (
-      status ===
-      'published'
-    ) {
+    if (status === 'published') {
 
       if (publishBtn) {
-
         publishBtn.textContent =
-          'Publishing...';
+          existing
+            ? 'Updating...'
+            : 'Publishing...';
       }
 
     } else {
 
       if (saveDraftBtn) {
-
         saveDraftBtn.textContent =
-          'Saving...';
+          existing
+            ? 'Updating...'
+            : 'Saving...';
       }
     }
 
 
     try {
 
+      /*
+       * IMPORTANT:
+       *
+       * Create:
+       * POST /api/blogs
+       *
+       * Edit:
+       * PUT /api/blogs/:id
+       */
+
+      const isEdit =
+        Boolean(editId);
+
+
+      const endpoint =
+        isEdit
+          ? `${DASHBOARD_API_BASE_URL}/blogs/${encodeURIComponent(editId)}`
+          : `${DASHBOARD_API_BASE_URL}/blogs`;
+
+
+      const method =
+        isEdit
+          ? 'PUT'
+          : 'POST';
+
+
+      console.log(
+        `Blog ${isEdit ? 'update' : 'create'} request:`,
+        method,
+        endpoint
+      );
+
+
       const response =
         await fetch(
-          `${DASHBOARD_API_BASE_URL}/blogs`,
+          endpoint,
           {
-
-            method: 'POST',
+            method: method,
 
             headers: {
 
@@ -1514,7 +1264,6 @@ function initCreatePage() {
 
               'Authorization':
                 `Bearer ${token}`
-
             },
 
             body:
@@ -1529,9 +1278,7 @@ function initCreatePage() {
         await response.json();
 
 
-      /*
-       * Auth error
-       */
+      // Auth error
       if (
         response.status === 401 ||
         response.status === 403
@@ -1541,54 +1288,47 @@ function initCreatePage() {
           'blogcraftToken'
         );
 
-
-        Toast.show(
+        Toast?.show?.(
           'Your session has expired. Please login again.',
           'error',
           5000
         );
 
-
         setTimeout(
           () => {
-
             window.location.href =
               'login.html';
-
           },
           1200
         );
 
-
         return;
       }
 
 
-      /*
-       * Backend error
-       */
-      if (
-        !response.ok
-      ) {
+      // Backend error
+      if (!response.ok) {
 
-        Toast.show(
+        Toast?.show?.(
           data.message ||
-          'Failed to create article.',
+          (
+            isEdit
+              ? 'Failed to update article.'
+              : 'Failed to create article.'
+          ),
           'error',
           5000
         );
 
-
         return;
       }
 
 
-      /*
-       * Save backend response locally
-       */
-      if (
-        data.blog
-      ) {
+      // ════════════════════════════════════════════════════════════════
+      // SAVE BACKEND RESPONSE LOCALLY
+      // ════════════════════════════════════════════════════════════════
+
+      if (data.blog) {
 
         const localArticle = {
 
@@ -1624,6 +1364,7 @@ function initCreatePage() {
             'U',
 
           date:
+            data.blog.updatedAt ||
             data.blog.createdAt ||
             new Date().toISOString(),
 
@@ -1631,6 +1372,7 @@ function initCreatePage() {
             status,
 
           views:
+            existing?.views ||
             0,
 
           userId:
@@ -1638,28 +1380,43 @@ function initCreatePage() {
         };
 
 
-        ContentDB.saveContent(
-          localArticle
+        if (
+          window.ContentDB &&
+          typeof ContentDB.saveContent === 'function'
+        ) {
+
+          ContentDB.saveContent(
+            localArticle
+          );
+        }
+      }
+
+
+      // Success message
+      if (isEdit) {
+
+        Toast?.show?.(
+          'Article updated successfully! 🎉',
+          'success'
+        );
+
+      } else if (status === 'published') {
+
+        Toast?.show?.(
+          'Article published successfully! 🎉',
+          'success'
+        );
+
+      } else {
+
+        Toast?.show?.(
+          'Draft saved successfully.',
+          'success'
         );
       }
 
 
-      /*
-       * Success
-       */
-      Toast.show(
-
-        status ===
-          'published'
-
-          ? 'Article published successfully! 🎉'
-
-          : 'Draft saved successfully.',
-
-        'success'
-      );
-
-
+      // Return to dashboard
       setTimeout(
         () => {
 
@@ -1674,12 +1431,11 @@ function initCreatePage() {
     } catch (error) {
 
       console.error(
-        'Create Blog API error:',
+        `Blog ${editId ? 'update' : 'create'} API error:`,
         error
       );
 
-
-      Toast.show(
+      Toast?.show?.(
         'Unable to connect to the backend. Make sure the server is running.',
         'error',
         5000
@@ -1694,7 +1450,9 @@ function initCreatePage() {
           false;
 
         saveDraftBtn.textContent =
-          'Save as Draft';
+          existing
+            ? 'Save Changes'
+            : 'Save as Draft';
       }
 
 
@@ -1704,26 +1462,27 @@ function initCreatePage() {
           false;
 
         publishBtn.textContent =
-          'Publish Article';
+          existing
+            ? 'Update & Publish'
+            : 'Publish Article';
       }
     }
   }
 
 
-  /*
-   * Buttons
-   */
+  // ══════════════════════════════════════════════════════════════════════════
+  // BUTTONS
+  // ══════════════════════════════════════════════════════════════════════════
+
   saveDraftBtn?.addEventListener(
     'click',
-    () =>
-      save('draft')
+    () => save('draft')
   );
 
 
   publishBtn?.addEventListener(
     'click',
-    () =>
-      save('published')
+    () => save('published')
   );
 
 
@@ -1732,7 +1491,6 @@ function initCreatePage() {
     event => {
 
       event.preventDefault();
-
 
       save(
         statusIn?.value ||
@@ -1757,6 +1515,5 @@ document.addEventListener(
     initDashboard();
 
     initCreatePage();
-
   }
 );

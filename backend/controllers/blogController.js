@@ -146,9 +146,100 @@ const getAllBlogs = async (req, res) => {
         });
     }
 };
+// Update Blog
+const updateBlog = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, content, category, image } = req.body;
+
+        // Validate required fields
+        if (!title || !content) {
+            return res.status(400).json({
+                message: "Title and content are required"
+            });
+        }
+
+        // Find the blog
+        const blog = await Blog.findById(id);
+
+        if (!blog) {
+            return res.status(404).json({
+                message: "Blog not found"
+            });
+        }
+
+        // Make sure only the blog owner can update it
+        if (blog.author.toString() !== req.user.id) {
+            return res.status(403).json({
+                message: "You are not authorized to update this blog"
+            });
+        }
+
+        // Resolve image path
+        const safeImage = resolveImage(title, image);
+
+        // Update blog
+        blog.title = title;
+        blog.content = content;
+        blog.category = category;
+        blog.image = safeImage;
+
+        await blog.save();
+
+        res.status(200).json({
+            message: "Blog updated successfully",
+            blog
+        });
+
+    } catch (error) {
+        console.error("Update blog error:", error.message);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+};
+// Delete Blog
+const deleteBlog = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Find the blog
+        const blog = await Blog.findById(id);
+
+        if (!blog) {
+            return res.status(404).json({
+                message: "Blog not found"
+            });
+        }
+
+        // Make sure only the blog owner can delete it
+        if (blog.author.toString() !== req.user.id) {
+            return res.status(403).json({
+                message: "You are not authorized to delete this blog"
+            });
+        }
+
+        // Delete the blog
+        await Blog.findByIdAndDelete(id);
+
+        res.status(200).json({
+            message: "Blog deleted successfully"
+        });
+
+    } catch (error) {
+        console.error("Delete blog error:", error.message);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+};
 
 
 module.exports = {
     createBlog,
-    getAllBlogs
-};
+    getAllBlogs,
+    updateBlog,
+    deleteBlog
+};
