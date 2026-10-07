@@ -146,6 +146,42 @@ const getAllBlogs = async (req, res) => {
         });
     }
 };
+
+// Get Logged-in User's Blogs
+const getMyBlogs = async (req, res) => {
+    try {
+        const blogs = await Blog.find({
+            author: req.user.id
+        })
+            .populate("author", "name email")
+            .sort({ createdAt: -1 });
+
+        const sanitizedBlogs = blogs.map(blog => {
+            const safeImage = resolveImage(blog.title, blog.image);
+
+            if (safeImage !== blog.image) {
+                const obj = blog.toObject();
+                obj.image = safeImage;
+                return obj;
+            }
+
+            return blog;
+        });
+
+        res.status(200).json({
+            message: "User blogs fetched successfully",
+            blogs: sanitizedBlogs
+        });
+
+    } catch (error) {
+        console.error("Get my blogs error:", error.message);
+
+        res.status(500).json({
+            message: "Server error"
+        });
+    }
+};
+
 // Update Blog
 const updateBlog = async (req, res) => {
     try {
@@ -240,6 +276,7 @@ const deleteBlog = async (req, res) => {
 module.exports = {
     createBlog,
     getAllBlogs,
+    getMyBlogs,
     updateBlog,
     deleteBlog
 };

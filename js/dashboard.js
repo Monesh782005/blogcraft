@@ -1,161 +1,1003 @@
-/**
- * BlogCraft — dashboard.js
- * Dashboard, Create, and Edit content functionality
- * Backend API integration
- */
+/* =========================================================
+   BlogCraft Dashboard
+   Module 5 - Authentication & User Dashboard
+   ========================================================= */
 
-'use strict';
+const DASHBOARD_API_BASE_URL = "http://localhost:5000/api";
 
-const DASHBOARD_API_BASE_URL = 'http://localhost:5000/api';
+let dashboardBlogs = [];
 
 
-// ══════════════════════════════════════════════════════════════════════════════
-// DASHBOARD
-// ══════════════════════════════════════════════════════════════════════════════
+/* =========================================================
+   BASIC HELPERS
+   ========================================================= */
 
-async function initDashboard() {
+function $(selector) {
+  return document.querySelector(selector);
+}
 
-  if (!document.getElementById('dashboardPage')) {
+
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+
+function getToken() {
+  return localStorage.getItem("blogcraftToken");
+}
+
+
+function showToast(message, type = "success") {
+
+  if (
+    window.Toast &&
+    typeof window.Toast.show === "function"
+  ) {
+    window.Toast.show(message, type);
     return;
   }
 
-  const user = requireAuth('login.html');
+  console.log(`[${type}] ${message}`);
+}
+
+
+/* =========================================================
+   AUTH FAILURE
+   ========================================================= */
+
+function handleAuthFailure(
+  message = "Session expired. Please login again."
+) {
+
+  localStorage.removeItem("blogcraftToken");
+
+  showToast(message, "error");
+
+  setTimeout(() => {
+    window.location.href = "login.html";
+  }, 500);
+}
+
+
+/* =========================================================
+   NORMALIZE BLOG
+   ========================================================= */
+
+function normalizeDashboardBlog(
+  blog,
+  fallbackUser = {}
+) {
+
+  const authorName =
+    typeof blog.author === "object"
+      ? (
+        blog.author?.name ||
+        fallbackUser?.name ||
+        "BlogCraft Author"
+      )
+      : (
+        blog.author ||
+        fallbackUser?.name ||
+        "BlogCraft Author"
+      );
+
+
+  const authorEmail =
+    typeof blog.author === "object"
+      ? (
+        blog.author?.email ||
+        fallbackUser?.email ||
+        ""
+      )
+      : (
+        fallbackUser?.email ||
+        ""
+      );
+
+
+  const initials =
+    authorName
+      .split(" ")
+      .filter(Boolean)
+      .map(name => name[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+
+
+  const plainText =
+    String(blog.content || "")
+      .replace(/<[^>]*>/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+
+  return {
+
+    id:
+      blog._id ||
+      blog.id,
+
+    title:
+      blog.title ||
+      "Untitled Article",
+
+    category:
+      blog.category ||
+      "General",
+
+    description:
+      blog.description ||
+      plainText.slice(0, 180) ||
+      "Read this article on BlogCraft.",
+
+    content:
+      blog.content ||
+      "",
+
+    tags:
+      Array.isArray(blog.tags)
+        ? blog.tags
+        : [],
+
+    image:
+      blog.image ||
+      null,
+
+    author:
+      authorName,
+
+    authorInitials:
+      initials ||
+      "BC",
+
+    authorEmail:
+      authorEmail,
+
+    date:
+      blog.createdAt ||
+      blog.date ||
+      new Date().toISOString(),
+
+    status:
+      blog.status ||
+      "published",
+
+    views:
+      Number(blog.views || 0),
+
+    userId:
+      typeof blog.author === "object"
+        ? blog.author?._id
+        : blog.author
+  };
+}
+
+
+/* =========================================================
+   FETCH LOGGED-IN USER BLOGS
+   ========================================================= */
+
+async function fetchMyBlogs(user) {
+
+  const token = getToken();
+
+
+  if (!token) {
+
+    handleAuthFailure();
+
+    return [];
+  }
+
+
+  try {
+
+    const response =
+      await fetch(
+        `${DASHBOARD_API_BASE_URL}/blogs/my`,
+        {
+          method: "GET",
+
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          }
+        }
+      );
+
+
+    if (response.status === 401) {
+
+      handleAuthFailure();
+
+      return [];
+    }
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        `HTTP ${response.status}`
+      );
+    }
+
+
+    const data =
+      await response.json();
+
+
+    if (!Array.isArray(data.blogs)) {
+
+      throw new Error(
+        "Invalid blogs response"
+      );
+    }
+
+
+    dashboardBlogs =
+      data.blogs.map(blog =>
+        normalizeDashboardBlog(
+          blog,
+          user
+        )
+      );
+
+
+    console.log(
+      "BlogCraft: My blogs loaded:",
+      dashboardBlogs.length
+    );
+
+
+    return dashboardBlogs;
+
+
+  } catch (error) {
+
+    console.error(
+      "BlogCraft: Failed to load my blogs:",
+      error
+    );
+
+
+    dashboardBlogs = [];
+
+
+    showToast(
+      "Unable to load your articles.",
+      "error"
+    );
+
+
+    return [];
+  }
+}
+
+
+/* =========================================================
+   GET USER INITIALS
+   ========================================================= */
+
+function getUserInitials(userName) {
+
+  return String(userName || "BlogCraft User")
+    .split(" ")
+    .filter(Boolean)
+    .map(name => name[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "BC";
+}
+
+
+/* =========================================================
+   GET GREETING
+   ========================================================= */
+
+function getGreeting() {
+
+  const hour =
+    new Date().getHours();
+
+
+  if (hour < 12) {
+    return "Good Morning";
+  }
+
+
+  if (hour < 17) {
+    return "Good Afternoon";
+  }
+
+
+  return "Good Evening";
+}
+
+
+/* =========================================================
+   UPDATE USER INFORMATION
+   ========================================================= */
+
+function updateDashboardUser(user) {
+
+  const userName =
+    user?.name ||
+    "BlogCraft User";
+
+  const userEmail =
+    user?.email ||
+    "";
+
+  const initials =
+    getUserInitials(userName);
+
+
+  /* =====================================================
+     USER NAME
+     ===================================================== */
+
+  const nameSelectors = [
+    "#headerUserName",
+    "#profileName",
+    "#greetingName",
+    ".user-name",
+    ".profile-name",
+    ".userName",
+    "[data-user-name]"
+  ];
+
+  nameSelectors.forEach(selector => {
+
+    document
+      .querySelectorAll(selector)
+      .forEach(element => {
+
+        element.textContent =
+          userName;
+
+      });
+
+  });
+
+
+  /* =====================================================
+     USER EMAIL
+     ===================================================== */
+
+  const emailSelectors = [
+    "#profileEmail",
+    ".user-email",
+    ".profile-email",
+    ".userEmail",
+    "[data-user-email]"
+  ];
+
+  emailSelectors.forEach(selector => {
+
+    document
+      .querySelectorAll(selector)
+      .forEach(element => {
+
+        element.textContent =
+          userEmail;
+
+      });
+
+  });
+
+
+  /* =====================================================
+     INITIALS / AVATAR
+     ===================================================== */
+
+  const avatarSelectors = [
+    "#userInitials",
+    "#profileInitials",
+    ".user-avatar",
+    ".profile-avatar",
+    ".avatar",
+    ".user-initials",
+    "[data-user-initials]"
+  ];
+
+  avatarSelectors.forEach(selector => {
+
+    document
+      .querySelectorAll(selector)
+      .forEach(element => {
+
+        element.textContent =
+          initials;
+
+      });
+
+  });
+
+
+  /* =====================================================
+     REPLACE REMAINING "Loading..." TEXT
+     ===================================================== */
+
+  document
+    .querySelectorAll("*")
+    .forEach(element => {
+
+      if (element.children.length > 0) {
+        return;
+      }
+
+      const text =
+        element.textContent
+          .trim();
+
+      if (text === "Loading...") {
+
+        /*
+         * If the element is inside an email-looking
+         * container, use email.
+         */
+        const parentText =
+          element.parentElement
+            ?.textContent
+            ?.toLowerCase() || "";
+
+        if (
+          parentText.includes("@")
+        ) {
+
+          element.textContent =
+            userEmail;
+
+        } else {
+
+          element.textContent =
+            userName;
+
+        }
+
+      }
+
+    });
+
+
+  /* =====================================================
+     GREETING
+     ===================================================== */
+
+  const greeting =
+    getGreeting();
+
+  const greetingCandidates =
+    document.querySelectorAll(
+      "header h1, header h2, header h3, .greeting, .welcome-text"
+    );
+
+  greetingCandidates.forEach(element => {
+
+    const text =
+      element.textContent
+        .trim()
+        .toLowerCase();
+
+    if (
+      text.includes("good day") ||
+      text.includes("good morning") ||
+      text.includes("good afternoon") ||
+      text.includes("good evening")
+    ) {
+
+      element.textContent =
+        `${greeting}, ${userName} 👋`;
+
+    }
+
+  });
+
+
+  console.log(
+    "BlogCraft: Dashboard user loaded:",
+    userName,
+    userEmail
+  );
+}
+
+/* =========================================================
+   DASHBOARD INITIALIZATION
+   ========================================================= */
+
+async function initDashboard() {
+
+  const dashboardPage =
+    document.getElementById(
+      "dashboardPage"
+    );
+
+
+  if (!dashboardPage) {
+    return;
+  }
+
+
+  /* -----------------------------------------------------
+     AUTH
+     ----------------------------------------------------- */
+
+  const user =
+    requireAuth("login.html");
+
 
   if (!user) {
     return;
   }
 
-  // User information
-  document.querySelectorAll('.user-name').forEach(el => {
-    el.textContent = user.name;
-  });
 
-  document.querySelectorAll('.user-initials').forEach(el => {
-    el.textContent = user.initials || 'U';
-  });
+  /* -----------------------------------------------------
+     USER INFORMATION
+     ----------------------------------------------------- */
 
-  document.querySelectorAll('.user-email').forEach(el => {
-    el.textContent = user.email;
-  });
+  updateDashboardUser(user);
 
-  // Greeting
-  const greeting = document.getElementById('dashGreeting');
 
-  if (greeting) {
+  /* -----------------------------------------------------
+     LOAD ONLY USER BLOGS
+     ----------------------------------------------------- */
 
-    const hour = new Date().getHours();
+  await fetchMyBlogs(user);
 
-    const time =
-      hour < 12
-        ? 'Morning'
-        : hour < 18
-          ? 'Afternoon'
-          : 'Evening';
 
-    greeting.innerHTML =
-      `Good ${time}, <strong>${user.name.split(' ')[0]}</strong> 👋`;
-  }
-
-  // Load backend content before rendering
-  try {
-
-    if (
-      window.ContentDB &&
-      typeof ContentDB.refreshBackendContent === 'function'
-    ) {
-      await ContentDB.refreshBackendContent();
-    }
-
-  } catch (error) {
-
-    console.error(
-      'Dashboard content loading failed:',
-      error
-    );
-  }
+  /* -----------------------------------------------------
+     RENDER
+     ----------------------------------------------------- */
 
   loadStats();
+
   loadContentTable();
+
+  updateMyArticlesBadge();
+
   initSidebar();
+
+
+  console.log(
+    "BlogCraft dashboard — logged-in user articles:",
+    dashboardBlogs.length
+  );
 }
 
 
-// ══════════════════════════════════════════════════════════════════════════════
-// DASHBOARD STATS
-// ══════════════════════════════════════════════════════════════════════════════
+/* =========================================================
+   DASHBOARD STATISTICS
+   ========================================================= */
 
 function loadStats() {
 
-  const all = ContentDB.getAllContent();
+  const all =
+    dashboardBlogs;
 
-  // For the internship dashboard, show all BlogCraft articles
-  const myContent = all.filter(() => true);
 
-  const published = myContent.filter(
-    article => article.status === 'published'
+  const totalArticles =
+    all.length;
+
+
+  const published =
+    all.filter(article =>
+      String(
+        article.status ||
+        "published"
+      ).toLowerCase() ===
+      "published"
+    ).length;
+
+
+  const drafts =
+    all.filter(article =>
+      String(
+        article.status ||
+        ""
+      ).toLowerCase() ===
+      "draft"
+    ).length;
+
+
+  const totalViews =
+    all.reduce(
+      (sum, article) =>
+        sum +
+        Number(
+          article.views ||
+          0
+        ),
+      0
+    );
+
+
+  /* -----------------------------------------------------
+     First try common IDs
+     ----------------------------------------------------- */
+
+  const totalEl =
+    document.getElementById(
+      "totalArticles"
+    );
+
+
+  const publishedEl =
+    document.getElementById(
+      "publishedArticles"
+    );
+
+
+  const draftsEl =
+    document.getElementById(
+      "draftArticles"
+    );
+
+
+  const viewsEl =
+    document.getElementById(
+      "totalViews"
+    );
+
+
+  if (totalEl) {
+    totalEl.textContent =
+      totalArticles;
+  }
+
+
+  if (publishedEl) {
+    publishedEl.textContent =
+      published;
+  }
+
+
+  if (draftsEl) {
+    draftsEl.textContent =
+      drafts;
+  }
+
+
+  if (viewsEl) {
+    viewsEl.textContent =
+      totalViews;
+  }
+
+
+  /* -----------------------------------------------------
+     Find stat cards from the actual page
+     ----------------------------------------------------- */
+
+  updateStatCardsByVisibleText(
+    totalArticles,
+    published,
+    drafts,
+    totalViews
   );
 
-  const drafts = myContent.filter(
-    article => article.status === 'draft'
-  );
 
-  const views = myContent.reduce(
-    (sum, article) =>
-      sum + Number(article.views || 0),
-    0
-  );
-
-  setValue('statTotal', myContent.length);
-  setValue('statPublished', published.length);
-  setValue('statDrafts', drafts.length);
-  setValue('statViews', views.toLocaleString());
+  updateMyArticlesBadge();
 }
 
 
-function setValue(id, value) {
+/* =========================================================
+   UPDATE STAT CARDS ROBUSTLY
+   ========================================================= */
 
-  const el = document.getElementById(id);
+function updateStatCardsByVisibleText(
+  total,
+  published,
+  drafts,
+  views
+) {
 
-  if (el) {
-    el.textContent = value;
+  /*
+   * The screenshot shows the four values as "—".
+   * We locate those value elements and replace them
+   * in dashboard order.
+   */
+
+  const dashElements =
+    Array.from(
+      document.querySelectorAll("*")
+    ).filter(element => {
+
+      if (
+        element.children.length > 0
+      ) {
+        return false;
+      }
+
+
+      const text =
+        element.textContent.trim();
+
+
+      return (
+        text === "—" ||
+        text === "-"
+      );
+    });
+
+
+  /*
+   * Remove duplicate nested matches
+   * and only use the first four.
+   */
+
+  const values = [
+    total,
+    published,
+    drafts,
+    views
+  ];
+
+
+  dashElements
+    .slice(0, 4)
+    .forEach(
+      (element, index) => {
+
+        element.textContent =
+          values[index];
+      }
+    );
+
+
+  /*
+   * Additional class-based support.
+   */
+
+  const valueElements =
+    document.querySelectorAll(
+      ".stat-value, .stat-number, .stat-count"
+    );
+
+
+  if (
+    valueElements.length >= 4
+  ) {
+
+    valueElements[0].textContent =
+      total;
+
+    valueElements[1].textContent =
+      published;
+
+    valueElements[2].textContent =
+      drafts;
+
+    valueElements[3].textContent =
+      views;
   }
 }
 
 
-// ══════════════════════════════════════════════════════════════════════════════
-// DASHBOARD ARTICLE TABLE
-// ══════════════════════════════════════════════════════════════════════════════
+/* =========================================================
+   MY ARTICLES BADGE
+   ========================================================= */
+
+function updateMyArticlesBadge() {
+
+  const count = dashboardBlogs.length;
+
+  console.log(
+    "BlogCraft: Updating My Articles badge:",
+    count
+  );
+
+
+
+  /*
+   * -------------------------------------------------------
+   * 1. Direct ID support
+   * -------------------------------------------------------
+   */
+
+  const directBadge =
+    document.getElementById("myArticlesCount");
+
+  if (directBadge) {
+    directBadge.textContent = count;
+  }
+
+
+  /*
+   * -------------------------------------------------------
+   * 2. Find "My Articles" anywhere in sidebar
+   * -------------------------------------------------------
+   *
+   * We don't depend on .sidebar-link because the actual
+   * dashboard HTML may use another class name.
+   */
+
+  const sidebarElements =
+    document.querySelectorAll(
+      "a, button, li, div, span"
+    );
+
+
+  sidebarElements.forEach(element => {
+
+    const text =
+      element.textContent
+        .trim()
+        .replace(/\s+/g, " ")
+        .toLowerCase();
+
+
+    /*
+     * We only want the element whose text is
+     * exactly "My Articles" or starts with it.
+     */
+
+    if (
+      text === "my articles" ||
+      text.startsWith("my articles ")
+    ) {
+
+      /*
+       * Look for the badge inside this element.
+       */
+
+      let badge =
+        element.querySelector(
+          ".badge, .count, [class*='badge'], [class*='count']"
+        );
+
+
+      /*
+       * If the badge isn't inside the element,
+       * check its parent.
+       */
+
+      if (!badge && element.parentElement) {
+
+        badge =
+          element.parentElement.querySelector(
+            ".badge, .count, [class*='badge'], [class*='count']"
+          );
+      }
+
+
+      /*
+       * Update existing badge.
+       */
+
+      if (badge) {
+
+        badge.textContent =
+          count;
+
+        console.log(
+          "BlogCraft: My Articles badge updated:",
+          count
+        );
+
+        return;
+      }
+    }
+  });
+
+
+  /*
+   * -------------------------------------------------------
+   * 3. Extra fallback
+   * -------------------------------------------------------
+   *
+   * Find the sidebar item containing "My Articles"
+   * and update its last numeric-looking badge.
+   */
+
+  const allLinks =
+    document.querySelectorAll(
+      "a, button, li"
+    );
+
+
+  allLinks.forEach(link => {
+
+    const text =
+      link.textContent
+        .trim()
+        .replace(/\s+/g, " ")
+        .toLowerCase();
+
+
+    if (
+      text.includes("my articles")
+    ) {
+
+      const possibleBadges =
+        link.querySelectorAll(
+          "span, div"
+        );
+
+
+      possibleBadges.forEach(item => {
+
+        const itemText =
+          item.textContent.trim();
+
+
+        /*
+         * Existing static badge such as "8"
+         */
+
+        if (
+          /^\d+$/.test(itemText)
+        ) {
+
+          item.textContent =
+            count;
+
+          console.log(
+            "BlogCraft: Static My Articles badge replaced:",
+            count
+          );
+        }
+      });
+    }
+  });
+}
+/* =========================================================
+   ARTICLE TABLE
+   ========================================================= */
 
 function loadContentTable() {
 
-  const tbody = document.getElementById('contentTableBody');
+  const tableBody =
+    document.getElementById("contentTableBody");
 
-  if (!tbody) {
+
+  if (!tableBody) {
+
+    console.warn(
+      "BlogCraft: Dashboard table body not found."
+    );
+
     return;
   }
 
-  const all = ContentDB.getAllContent();
 
-  console.log(
-    'BlogCraft dashboard articles:',
-    all.length
-  );
+  tableBody.innerHTML = "";
 
-  if (all.length === 0) {
 
-    tbody.innerHTML = `
+  /* -----------------------------------------------------
+     EMPTY
+     ----------------------------------------------------- */
+
+  if (
+    dashboardBlogs.length ===
+    0
+  ) {
+
+    tableBody.innerHTML = `
             <tr>
                 <td
                     colspan="5"
                     style="
                         text-align:center;
-                        padding:32px;
-                        color:var(--text-muted);
+                        padding:40px 20px;
                     "
                 >
-                    No content yet.
+                    <span>
+                        No articles yet.
+                    </span>
 
-                    <a href="create.html">
+                    <a
+                        href="create-blog.html"
+                        style="
+                            color:#7c7cff;
+                            text-decoration:none;
+                            margin-left:5px;
+                        "
+                    >
                         Create your first article →
                     </a>
                 </td>
@@ -165,132 +1007,247 @@ function loadContentTable() {
     return;
   }
 
-  tbody.innerHTML =
-    all
-      .map(item => {
 
-        const dateStr =
-          item.date
-            ? new Date(item.date).toLocaleDateString(
-              'en-US',
-              {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric'
-              }
-            )
-            : '—';
+  /* -----------------------------------------------------
+     ARTICLES
+     ----------------------------------------------------- */
 
-        const badge =
-          item.status === 'published'
+  dashboardBlogs.forEach(
+    article => {
 
-            ? `
-                            <span class="badge badge-published">
-                                Published
-                            </span>
-                        `
-
-            : `
-                            <span class="badge badge-draft">
-                                Draft
-                            </span>
-                        `;
-
-        return `
-                    <tr>
-
-                        <td data-label="Title">
-
-                            <span class="table-title">
-                                ${escapeHtml(item.title)}
-                            </span>
-
-                        </td>
+      const row =
+        document.createElement(
+          "tr"
+        );
 
 
-                        <td data-label="Category">
-
-                            <span class="badge badge-tech">
-                                ${escapeHtml(item.category || 'General')}
-                            </span>
-
-                        </td>
+      const date =
+        formatArticleDate(
+          article.date
+        );
 
 
-                        <td data-label="Status">
-
-                            ${badge}
-
-                        </td>
-
-
-                        <td data-label="Date">
-
-                            ${dateStr}
-
-                        </td>
+      const status =
+        String(
+          article.status ||
+          "published"
+        ).toLowerCase();
 
 
-                        <td data-label="Actions">
-
-                            <div class="table-actions">
-
-                                <a
-                                    href="details.html?id=${encodeURIComponent(item.id)}"
-                                    class="btn btn-sm btn-outline-accent"
-                                    aria-label="View ${escapeHtml(item.title)}"
-                                >
-                                    View
-                                </a>
+      const statusLabel =
+        status === "draft"
+          ? "Draft"
+          : "Published";
 
 
-                                <a
-                                    href="create.html?id=${encodeURIComponent(item.id)}"
-                                    class="btn btn-sm btn-secondary"
-                                    aria-label="Edit ${escapeHtml(item.title)}"
-                                >
-                                    Edit
-                                </a>
+      const safeId =
+        escapeHTML(
+          article.id
+        );
 
 
-                                <button
-                                    type="button"
-                                    class="btn btn-sm btn-danger"
-                                    data-delete="${escapeHtml(item.id)}"
-                                    aria-label="Delete ${escapeHtml(item.title)}"
-                                >
-                                    Delete
-                                </button>
+      row.innerHTML = `
 
-                            </div>
+                <td
+                    class="article-title-cell"
+                    style="
+                        min-width:280px;
+                        max-width:430px;
+                    "
+                >
 
-                        </td>
+                    <div
+                        class="article-title"
+                        style="
+                            font-weight:600;
+                            line-height:1.4;
+                            white-space:normal;
+                            overflow-wrap:anywhere;
+                        "
+                    >
+                        ${escapeHTML(
+        article.title
+      )}
+                    </div>
 
-                    </tr>
-                `;
-      })
-      .join('');
+                </td>
 
-  // Delete handlers
-  tbody
-    .querySelectorAll('[data-delete]')
+
+                <td>
+
+                    <span
+                        class="category-badge"
+                    >
+                        ${escapeHTML(
+        article.category
+      )}
+                    </span>
+
+                </td>
+
+
+                <td>
+
+                    <span
+                        class="status-badge ${status === "draft"
+          ? "draft"
+          : "published"
+        }"
+                    >
+                        ${statusLabel}
+                    </span>
+
+                </td>
+
+
+                <td>
+                    ${date}
+                </td>
+
+
+                <td>
+
+                    <div
+                        class="article-actions"
+                        style="
+                            display:flex;
+                            align-items:center;
+                            gap:8px;
+                            white-space:nowrap;
+                        "
+                    >
+
+                        <button
+                            type="button"
+                            class="action-btn view-btn"
+                            data-id="${safeId}"
+                            style="
+                                padding:8px 14px;
+                                border-radius:10px;
+                                border:1px solid rgba(124,124,255,.5);
+                                background:transparent;
+                                color:#ffffff;
+                                cursor:pointer;
+                                font-size:14px;
+                            "
+                        >
+                            View
+                        </button>
+
+
+                        <button
+                            type="button"
+                            class="action-btn edit-btn"
+                            data-id="${safeId}"
+                            style="
+                                padding:8px 14px;
+                                border-radius:10px;
+                                border:1px solid rgba(255,255,255,.15);
+                                background:#20283c;
+                                color:#ffffff;
+                                cursor:pointer;
+                                font-size:14px;
+                            "
+                        >
+                            Edit
+                        </button>
+
+
+                        <button
+                            type="button"
+                            class="action-btn delete-btn"
+                            data-id="${safeId}"
+                            style="
+                                padding:8px 14px;
+                                border-radius:10px;
+                                border:1px solid rgba(255,80,100,.45);
+                                background:transparent;
+                                color:#ff647c;
+                                cursor:pointer;
+                                font-size:14px;
+                            "
+                        >
+                            Delete
+                        </button>
+
+                    </div>
+
+                </td>
+            `;
+
+
+      tableBody.appendChild(
+        row
+      );
+    }
+  );
+
+
+  /* -----------------------------------------------------
+     VIEW
+     ----------------------------------------------------- */
+
+  tableBody
+    .querySelectorAll(
+      ".view-btn"
+    )
     .forEach(button => {
 
       button.addEventListener(
-        'click',
+        "click",
         () => {
 
-          const row = button.closest('tr');
+          const id =
+            button.dataset.id;
 
-          const title =
-            row
-              ?.querySelector('.table-title')
-              ?.textContent
-              ?.trim();
+          window.location.href =
+            `details.html?id=${encodeURIComponent(id)}`;
+        }
+      );
+    });
 
-          confirmDelete(
-            button.dataset.delete,
-            title
+
+  /* -----------------------------------------------------
+     EDIT
+     ----------------------------------------------------- */
+
+  tableBody
+    .querySelectorAll(
+      ".edit-btn"
+    )
+    .forEach(button => {
+
+      button.addEventListener(
+        "click",
+        () => {
+
+          const id =
+            button.dataset.id;
+
+
+          window.location.href =
+            `create.html?id=${encodeURIComponent(id)}`;
+        }
+      );
+    });
+
+
+  /* -----------------------------------------------------
+     DELETE
+     ----------------------------------------------------- */
+
+  tableBody
+    .querySelectorAll(
+      ".delete-btn"
+    )
+    .forEach(button => {
+
+      button.addEventListener(
+        "click",
+        () => {
+
+          deleteArticle(
+            button.dataset.id
           );
         }
       );
@@ -298,439 +1255,529 @@ function loadContentTable() {
 }
 
 
-// ══════════════════════════════════════════════════════════════════════════════
-// HTML ESCAPE
-// ══════════════════════════════════════════════════════════════════════════════
+/* =========================================================
+   FORMAT DATE
+   ========================================================= */
 
-function escapeHtml(value) {
+function formatArticleDate(
+  dateValue
+) {
 
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  if (!dateValue) {
+    return "-";
+  }
+
+
+  const date =
+    new Date(dateValue);
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "-";
+  }
+
+
+  return date.toLocaleDateString(
+    "en-US",
+    {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    }
+  );
 }
 
 
-// ══════════════════════════════════════════════════════════════════════════════
-// DELETE
-// ══════════════════════════════════════════════════════════════════════════════
+/* =========================================================
+   DELETE ARTICLE
+   ========================================================= */
 
-function confirmDelete(id, title) {
+async function deleteArticle(id) {
 
-  const overlay =
-    document.getElementById('deleteModal');
+  const article =
+    dashboardBlogs.find(
+      item =>
+        String(item.id) ===
+        String(id)
+    );
 
-  const titleEl =
-    document.getElementById('deleteModalTitle');
 
-  if (titleEl) {
-    titleEl.textContent =
-      title || 'this article';
-  }
+  if (!article) {
 
-  if (
-    typeof Modal !== 'undefined' &&
-    overlay
-  ) {
-    Modal.open(overlay);
-  }
+    showToast(
+      "Article not found.",
+      "error"
+    );
 
-  const confirmButton =
-    document.getElementById('confirmDeleteBtn');
-
-  if (!confirmButton) {
     return;
   }
 
-  // Prevent multiple handlers
-  confirmButton.onclick = async () => {
 
-    const token =
-      localStorage.getItem('blogcraftToken');
+  const confirmed =
+    window.confirm(
+      `Are you sure you want to delete "${article.title}"?`
+    );
 
-    if (!token) {
 
-      Toast?.show?.(
-        'Please login again to continue.',
-        'error'
+  if (!confirmed) {
+    return;
+  }
+
+
+  const token =
+    getToken();
+
+
+  if (!token) {
+
+    handleAuthFailure();
+
+    return;
+  }
+
+
+  try {
+
+    const response =
+      await fetch(
+        `${DASHBOARD_API_BASE_URL}/blogs/${encodeURIComponent(id)}`,
+        {
+          method: "DELETE",
+
+          headers: {
+            Authorization:
+              `Bearer ${token}`
+          }
+        }
       );
+
+
+    if (
+      response.status ===
+      401
+    ) {
+
+      handleAuthFailure();
 
       return;
     }
 
-    try {
 
-      confirmButton.disabled = true;
-      confirmButton.textContent = 'Deleting...';
-
-      const response =
-        await fetch(
-          `${DASHBOARD_API_BASE_URL}/blogs/${encodeURIComponent(id)}`,
-          {
-            method: 'DELETE',
-
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          }
+    const data =
+      await response
+        .json()
+        .catch(
+          () => ({})
         );
 
-      const data =
-        await response.json();
 
-      // Authentication error
-      if (
-        response.status === 401 ||
-        response.status === 403
-      ) {
+    if (!response.ok) {
 
-        localStorage.removeItem('blogcraftToken');
-
-        Toast?.show?.(
-          'Your session has expired. Please login again.',
-          'error',
-          5000
-        );
-
-        if (
-          typeof Modal !== 'undefined' &&
-          overlay
-        ) {
-          Modal.close(overlay);
-        }
-
-        setTimeout(() => {
-          window.location.href = 'login.html';
-        }, 1000);
-
-        return;
-      }
-
-      // Backend error
-      if (!response.ok) {
-
-        Toast?.show?.(
-          data.message ||
-          'Failed to delete article.',
-          'error',
-          5000
-        );
-
-        return;
-      }
-
-      // Remove from local cache after backend succeeds
-      if (
-        window.ContentDB &&
-        typeof ContentDB.deleteContent === 'function'
-      ) {
-        ContentDB.deleteContent(id);
-      }
-
-      if (
-        typeof Modal !== 'undefined' &&
-        overlay
-      ) {
-        Modal.close(overlay);
-      }
-
-      Toast?.show?.(
+      throw new Error(
         data.message ||
-        'Article deleted successfully.',
-        'success'
+        `HTTP ${response.status}`
       );
-
-      loadStats();
-      loadContentTable();
-
-    } catch (error) {
-
-      console.error(
-        'Delete Blog API error:',
-        error
-      );
-
-      Toast?.show?.(
-        'Unable to connect to the backend. Make sure the server is running.',
-        'error',
-        5000
-      );
-
-    } finally {
-
-      confirmButton.disabled = false;
-      confirmButton.textContent = 'Delete';
     }
-  };
+
+
+    /* -------------------------------------------------
+       Remove from dashboard
+       ------------------------------------------------- */
+
+    dashboardBlogs =
+      dashboardBlogs.filter(
+        item =>
+          String(item.id) !==
+          String(id)
+      );
+
+
+    /* -------------------------------------------------
+       Remove local copy
+       ------------------------------------------------- */
+
+    if (
+      window.ContentDB &&
+      typeof ContentDB.deleteContent ===
+      "function"
+    ) {
+
+      try {
+
+        ContentDB.deleteContent(
+          id
+        );
+
+      } catch (error) {
+
+        console.warn(
+          "ContentDB delete failed:",
+          error
+        );
+      }
+    }
+
+
+    /* -------------------------------------------------
+       Refresh
+       ------------------------------------------------- */
+
+    loadStats();
+
+    loadContentTable();
+
+    updateMyArticlesBadge();
+
+
+    showToast(
+      "Article deleted successfully.",
+      "success"
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "Delete article error:",
+      error
+    );
+
+
+    showToast(
+      error.message ||
+      "Failed to delete article.",
+      "error"
+    );
+  }
 }
 
 
-// ══════════════════════════════════════════════════════════════════════════════
-// SIDEBAR
-// ══════════════════════════════════════════════════════════════════════════════
+/* =========================================================
+   SIDEBAR
+   ========================================================= */
 
 function initSidebar() {
 
-  const toggle =
-    document.getElementById('sidebarToggle');
+  /* -----------------------------------------------------
+     LOGOUT
+     ----------------------------------------------------- */
 
-  const sidebar =
-    document.getElementById('sidebar');
-
-  const overlay =
-    document.getElementById('sidebarOverlay');
-
-  const closeBtn =
-    document.getElementById('sidebarClose');
+  const logoutButtons =
+    document.querySelectorAll(
+      ".logout-link, #logoutBtn, [data-action='logout']"
+    );
 
 
-  function openSidebar() {
+  logoutButtons.forEach(
+    button => {
 
-    sidebar?.classList.add('open');
+      /*
+       * Avoid registering twice.
+       */
 
-    overlay?.classList.add('open');
-
-    document.body.style.overflow = 'hidden';
-  }
-
-
-  function closeSidebar() {
-
-    sidebar?.classList.remove('open');
-
-    overlay?.classList.remove('open');
-
-    document.body.style.overflow = '';
-  }
+      if (
+        button.dataset.dashboardLogoutBound ===
+        "true"
+      ) {
+        return;
+      }
 
 
-  toggle?.addEventListener(
-    'click',
-    openSidebar
-  );
+      button.dataset.dashboardLogoutBound =
+        "true";
 
 
-  closeBtn?.addEventListener(
-    'click',
-    closeSidebar
-  );
+      button.addEventListener(
+        "click",
+        event => {
+
+          event.preventDefault();
 
 
-  overlay?.addEventListener(
-    'click',
-    closeSidebar
-  );
+          if (
+            typeof logout ===
+            "function"
+          ) {
+
+            logout();
+
+            return;
+          }
 
 
-  // Active sidebar link
-  const current =
-    location.pathname
-      .split('/')
-      .pop();
+          localStorage.removeItem(
+            "blogcraftToken"
+          );
 
-  document
-    .querySelectorAll('.sidebar-link[data-page]')
-    .forEach(link => {
 
-      link.classList.toggle(
-        'active',
-        link.dataset.page === current
+          window.location.href =
+            "login.html";
+        }
       );
-    });
+    }
+  );
 }
 
 
-// ══════════════════════════════════════════════════════════════════════════════
-// CREATE / EDIT PAGE
-// ══════════════════════════════════════════════════════════════════════════════
+/* =========================================================
+   CREATE / EDIT PAGE
+   ========================================================= */
 
-function initCreatePage() {
+async function initCreatePage() {
 
-  if (!document.getElementById('createPage')) {
+  const createPage =
+    document.getElementById(
+      "createPage"
+    );
+
+
+  if (!createPage) {
     return;
   }
 
+
+  /* -----------------------------------------------------
+     AUTH
+     ----------------------------------------------------- */
+
   const user =
-    requireAuth('login.html');
+    requireAuth("login.html");
+
 
   if (!user) {
     return;
   }
 
-  const params =
-    new URLSearchParams(location.search);
 
-  const editId =
-    params.get('id');
-
-  const existing =
-    editId
-      ? ContentDB.getById(editId)
-      : null;
+  const form =
+    document.getElementById(
+      "createForm"
+    );
 
 
-  // Heading
-  const pageHeading =
-    document.getElementById('createHeading');
-
-  if (pageHeading) {
-
-    pageHeading.textContent =
-      existing
-        ? 'Edit Article'
-        : 'Create New Article';
+  if (!form) {
+    return;
   }
 
 
-  // Form elements
-  const form =
-    document.getElementById('createForm');
+  /* -----------------------------------------------------
+     FORM ELEMENTS
+     ----------------------------------------------------- */
 
-  const titleIn =
-    document.getElementById('artTitle');
+  const titleInput =
+    document.getElementById(
+      "artTitle"
+    );
 
-  const categoryIn =
-    document.getElementById('artCategory');
 
-  const descIn =
-    document.getElementById('artDesc');
+  const categoryInput =
+    document.getElementById(
+      "artCategory"
+    );
 
-  const contentIn =
-    document.getElementById('artContent');
 
-  const statusIn =
-    document.getElementById('artStatus');
+  const descriptionInput =
+    document.getElementById(
+      "artDesc"
+    );
+
+
+  const contentInput =
+    document.getElementById(
+      "artContent"
+    );
+
+
+  const statusInput =
+    document.getElementById(
+      "artStatus"
+    );
+
 
   const tagsWrap =
-    document.getElementById('tagsWrap');
+    document.getElementById(
+      "tagsWrap"
+    );
 
-  const charCount =
-    document.getElementById('descCharCount');
 
-  const imgArea =
-    document.getElementById('imageUploadArea');
+  const imageUploadArea =
+    document.getElementById(
+      "imageUploadArea"
+    );
 
-  const imgInput =
-    document.getElementById('imageInput');
 
-  const imgPreview =
-    document.getElementById('imagePreview');
+  const imageInput =
+    document.getElementById(
+      "imageInput"
+    );
+
+
+  const imagePreview =
+    document.getElementById(
+      "imagePreview"
+    );
+
 
   const previewImg =
-    document.getElementById('previewImg');
+    document.getElementById(
+      "previewImg"
+    );
+
 
   const removeImgBtn =
-    document.getElementById('removeImgBtn');
+    document.getElementById(
+      "removeImgBtn"
+    );
+
 
   const saveDraftBtn =
-    document.getElementById('saveDraftBtn');
+    document.getElementById(
+      "saveDraftBtn"
+    );
+
 
   const publishBtn =
-    document.getElementById('publishBtn');
+    document.getElementById(
+      "publishBtn"
+    );
 
 
-  let tags = [];
+  /* -----------------------------------------------------
+     EDIT ID
+     ----------------------------------------------------- */
 
-  let imageBase64 = null;
+  const params =
+    new URLSearchParams(
+      window.location.search
+    );
 
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // POPULATE EDIT FORM
-  // ══════════════════════════════════════════════════════════════════════════
+  const editId =
+    params.get("id");
+
+
+  let existing = null;
+
+
+  /* -----------------------------------------------------
+     LOAD EDIT ARTICLE
+     ----------------------------------------------------- */
+
+  if (editId) {
+
+    const myBlogs =
+      await fetchMyBlogs(
+        user
+      );
+
+
+    existing =
+      myBlogs.find(
+        article =>
+          String(article.id) ===
+          String(editId)
+      );
+
+
+    /*
+     * Security:
+     * User can only edit their own blog.
+     */
+
+    if (!existing) {
+
+      showToast(
+        "Article not found or you are not authorized to edit it.",
+        "error"
+      );
+
+
+      setTimeout(() => {
+
+        window.location.href =
+          "dashboard.html";
+
+      }, 700);
+
+
+      return;
+    }
+  }
+
+
+  /* -----------------------------------------------------
+     POPULATE EDIT FORM
+     ----------------------------------------------------- */
 
   if (existing) {
 
-    if (titleIn) {
-      titleIn.value =
-        existing.title || '';
+    if (titleInput) {
+
+      titleInput.value =
+        existing.title;
     }
 
-    if (categoryIn) {
-      categoryIn.value =
-        existing.category || '';
+
+    if (categoryInput) {
+
+      categoryInput.value =
+        existing.category;
     }
 
-    if (descIn) {
-      descIn.value =
-        existing.description || '';
+
+    if (descriptionInput) {
+
+      descriptionInput.value =
+        existing.description ||
+        "";
     }
 
-    if (contentIn) {
 
-      contentIn.value =
-        existing.content
-          ?.replace(/<[^>]+>/g, '') || '';
+    if (contentInput) {
+
+      contentInput.value =
+        existing.content ||
+        "";
     }
 
-    if (statusIn) {
 
-      statusIn.value =
+    if (statusInput) {
+
+      statusInput.value =
         existing.status ||
-        'published';
+        "published";
     }
 
-    tags = [
-      ...(existing.tags || [])
-    ];
 
-    if (existing.image) {
+    if (
+      existing.image &&
+      previewImg &&
+      imagePreview
+    ) {
 
-      showPreview(existing.image);
+      previewImg.src =
+        existing.image;
 
-      if (
-        existing.image.startsWith('data:image/')
-      ) {
-
-        imageBase64 =
-          existing.image;
-      }
+      imagePreview.style.display =
+        "block";
     }
-
-    renderTags();
-
-    updateCharCount();
   }
 
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // CHARACTER COUNT
-  // ══════════════════════════════════════════════════════════════════════════
+  /* =====================================================
+     TAGS
+     ===================================================== */
 
-  function updateCharCount() {
+  let selectedTags =
+    existing &&
+      Array.isArray(existing.tags)
+      ? [...existing.tags]
+      : [];
 
-    if (!descIn || !charCount) {
-      return;
-    }
-
-    const len =
-      descIn.value.length;
-
-    charCount.textContent =
-      `${len}/200`;
-
-    charCount.className =
-      'char-counter' +
-      (
-        len > 200
-          ? ' error'
-          : len > 160
-            ? ' warn'
-            : ''
-      );
-  }
-
-
-  descIn?.addEventListener(
-    'input',
-    updateCharCount
-  );
-
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // TAGS
-  // ══════════════════════════════════════════════════════════════════════════
 
   function renderTags() {
 
@@ -738,778 +1785,706 @@ function initCreatePage() {
       return;
     }
 
-    const chips =
-      tags
-        .map(tag => `
 
-                    <span class="tag-chip">
+    const oldInput =
+      tagsWrap.querySelector(
+        "input"
+      );
 
-                        ${escapeHtml(tag)}
 
-                        <button
-                            type="button"
-                            class="tag-chip-remove"
-                            data-tag="${escapeHtml(tag)}"
-                            aria-label="Remove tag ${escapeHtml(tag)}"
-                        >
-                            ×
-                        </button>
-
-                    </span>
-
-                `)
-        .join('');
+    const inputHTML =
+      oldInput
+        ? oldInput.outerHTML
+        : `
+                    <input
+                        type="text"
+                        id="tagInput"
+                        placeholder="Add tag and press Enter"
+                    >
+                `;
 
 
     tagsWrap.innerHTML =
-      chips +
-      `
-
-                <input
-                    type="text"
-                    class="tags-input-field"
-                    id="tagsField"
-                    placeholder="${tags.length
-        ? ''
-        : 'Add tags (Enter)'
-      }"
-                    aria-label="Add tag"
-                >
-
-            `;
+      "";
 
 
-    tagsWrap
-      .querySelectorAll('.tag-chip-remove')
-      .forEach(button => {
+    selectedTags.forEach(
+      (tag, index) => {
 
-        button.addEventListener(
-          'click',
-          () => {
+        const tagElement =
+          document.createElement(
+            "span"
+          );
 
-            tags =
-              tags.filter(
-                tag =>
-                  tag !==
-                  button.dataset.tag
-              );
 
-            renderTags();
-          }
+        tagElement.className =
+          "tag-item";
+
+
+        tagElement.innerHTML = `
+                    ${escapeHTML(tag)}
+
+                    <button
+                        type="button"
+                        class="remove-tag"
+                        data-index="${index}"
+                    >
+                        ×
+                    </button>
+                `;
+
+
+        tagsWrap.appendChild(
+          tagElement
         );
-      });
+      }
+    );
 
 
-    const field =
-      document.getElementById('tagsField');
+    tagsWrap.insertAdjacentHTML(
+      "beforeend",
+      inputHTML
+    );
 
 
-    field?.addEventListener(
-      'keydown',
-      event => {
+    const input =
+      tagsWrap.querySelector(
+        "input"
+      );
 
-        if (
-          (
-            event.key === 'Enter' ||
-            event.key === ','
-          ) &&
-          field.value.trim()
-        ) {
+
+    if (input) {
+
+      input.addEventListener(
+        "keydown",
+        event => {
+
+          if (
+            event.key !==
+            "Enter"
+          ) {
+            return;
+          }
+
 
           event.preventDefault();
 
-          const tag =
-            field.value
-              .trim()
-              .replace(/,/g, '')
-              .toLowerCase();
+
+          const value =
+            input.value.trim();
 
 
           if (
-            tag &&
-            !tags.includes(tag) &&
-            tags.length < 8
+            !value ||
+            selectedTags.includes(
+              value
+            )
           ) {
-
-            tags.push(tag);
-
-            renderTags();
+            return;
           }
+
+
+          selectedTags.push(
+            value
+          );
+
+
+          renderTags();
         }
-      }
-    );
+      );
+    }
+
+
+    tagsWrap
+      .querySelectorAll(
+        ".remove-tag"
+      )
+      .forEach(
+        button => {
+
+          button.addEventListener(
+            "click",
+            () => {
+
+              const index =
+                Number(
+                  button.dataset.index
+                );
+
+
+              selectedTags.splice(
+                index,
+                1
+              );
+
+
+              renderTags();
+            }
+          );
+        }
+      );
   }
 
 
   renderTags();
 
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // IMAGE PREVIEW
-  // ══════════════════════════════════════════════════════════════════════════
+  /* =====================================================
+     IMAGE UPLOAD
+     ===================================================== */
 
-  function showPreview(src) {
+  if (
+    imageUploadArea &&
+    imageInput
+  ) {
 
-    if (imgArea) {
-      imgArea.style.display = 'none';
-    }
+    imageUploadArea.addEventListener(
+      "click",
+      () => {
 
-    if (imgPreview) {
-      imgPreview.style.display = '';
-    }
-
-    if (previewImg) {
-      previewImg.src = src;
-    }
-  }
-
-
-  function hidePreview() {
-
-    if (imgArea) {
-      imgArea.style.display = '';
-    }
-
-    if (imgPreview) {
-      imgPreview.style.display = 'none';
-    }
-
-    imageBase64 = null;
-
-    if (previewImg) {
-      previewImg.src = '';
-    }
-  }
-
-
-  imgArea?.addEventListener(
-    'click',
-    () => imgInput?.click()
-  );
-
-
-  imgArea?.addEventListener(
-    'dragover',
-    event => {
-
-      event.preventDefault();
-
-      imgArea.classList.add('drag-over');
-    }
-  );
-
-
-  imgArea?.addEventListener(
-    'dragleave',
-    () => {
-
-      imgArea.classList.remove('drag-over');
-    }
-  );
-
-
-  imgArea?.addEventListener(
-    'drop',
-    event => {
-
-      event.preventDefault();
-
-      imgArea.classList.remove('drag-over');
-
-      const file =
-        event.dataTransfer.files[0];
-
-      if (
-        file &&
-        file.type.startsWith('image/')
-      ) {
-
-        handleFile(file);
+        imageInput.click();
       }
-    }
-  );
+    );
 
 
-  imgInput?.addEventListener(
-    'change',
-    () => {
+    imageInput.addEventListener(
+      "change",
+      () => {
 
-      if (imgInput.files[0]) {
+        const file =
+          imageInput.files?.[0];
 
-        handleFile(
-          imgInput.files[0]
+
+        if (!file) {
+          return;
+        }
+
+
+        if (
+          !file.type.startsWith(
+            "image/"
+          )
+        ) {
+
+          showToast(
+            "Please select an image file.",
+            "error"
+          );
+
+
+          imageInput.value =
+            "";
+
+
+          return;
+        }
+
+
+        const reader =
+          new FileReader();
+
+
+        reader.onload =
+          event => {
+
+            if (
+              previewImg &&
+              imagePreview
+            ) {
+
+              previewImg.src =
+                event.target.result;
+
+
+              imagePreview.style.display =
+                "block";
+            }
+          };
+
+
+        reader.readAsDataURL(
+          file
         );
       }
-    }
-  );
+    );
+  }
 
 
-  removeImgBtn?.addEventListener(
-    'click',
-    hidePreview
-  );
+  /* =====================================================
+     REMOVE IMAGE
+     ===================================================== */
+
+  if (removeImgBtn) {
+
+    removeImgBtn.addEventListener(
+      "click",
+      event => {
+
+        event.preventDefault();
+
+        event.stopPropagation();
 
 
-  function handleFile(file) {
+        if (imageInput) {
+          imageInput.value =
+            "";
+        }
+
+
+        if (previewImg) {
+          previewImg.src =
+            "";
+        }
+
+
+        if (imagePreview) {
+
+          imagePreview.style.display =
+            "none";
+        }
+      }
+    );
+  }
+
+
+  /* =====================================================
+     IMAGE VALUE
+     ===================================================== */
+
+  function getImageValue() {
 
     if (
-      file.size >
-      4 * 1024 * 1024
+      previewImg &&
+      previewImg.src &&
+      previewImg.src !==
+      window.location.href
     ) {
 
-      Toast?.show?.(
-        'Image must be under 4MB.',
-        'error'
+      return previewImg.src;
+    }
+
+
+    if (
+      existing &&
+      existing.image
+    ) {
+
+      return existing.image;
+    }
+
+
+    return null;
+  }
+
+
+  /* =====================================================
+     BUTTON STATE
+     ===================================================== */
+
+  function setSavingState(
+    isSaving,
+    button
+  ) {
+
+    if (!button) {
+      return;
+    }
+
+
+    if (isSaving) {
+
+      button.disabled =
+        true;
+
+
+      button.dataset.originalText =
+        button.textContent;
+
+
+      button.textContent =
+        "Saving...";
+
+
+    } else {
+
+      button.disabled =
+        false;
+
+
+      button.textContent =
+        button.dataset.originalText ||
+        button.textContent;
+    }
+  }
+
+
+  /* =====================================================
+     SAVE ARTICLE
+     ===================================================== */
+
+  async function saveArticle(
+    requestedStatus
+  ) {
+
+    const title =
+      titleInput?.value.trim() ||
+      "";
+
+
+    const category =
+      categoryInput?.value.trim() ||
+      "General";
+
+
+    const description =
+      descriptionInput?.value.trim() ||
+      "";
+
+
+    const content =
+      contentInput?.value.trim() ||
+      "";
+
+
+    const status =
+      requestedStatus ||
+      statusInput?.value ||
+      "published";
+
+
+    /* -------------------------------------------------
+       VALIDATION
+       ------------------------------------------------- */
+
+    if (!title) {
+
+      showToast(
+        "Please enter an article title.",
+        "error"
       );
+
+
+      titleInput?.focus();
+
 
       return;
     }
 
 
-    const reader =
-      new FileReader();
+    if (!content) {
 
-
-    reader.onload =
-      event => {
-
-        imageBase64 =
-          event.target.result;
-
-        showPreview(
-          imageBase64
-        );
-      };
-
-
-    reader.readAsDataURL(file);
-  }
-
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // VALIDATION
-  // ══════════════════════════════════════════════════════════════════════════
-
-  function validate() {
-
-    let valid = true;
-
-
-    if (!titleIn?.value.trim()) {
-
-      showErr(
-        titleIn,
-        'titleError',
-        'Title is required.'
+      showToast(
+        "Please enter article content.",
+        "error"
       );
 
-      valid = false;
 
-    } else {
-
-      clearErr(
-        titleIn,
-        'titleError'
-      );
-    }
+      contentInput?.focus();
 
 
-    if (!categoryIn?.value) {
-
-      showErr(
-        categoryIn,
-        'categoryError',
-        'Please select a category.'
-      );
-
-      valid = false;
-
-    } else {
-
-      clearErr(
-        categoryIn,
-        'categoryError'
-      );
-    }
-
-
-    if (!descIn?.value.trim()) {
-
-      showErr(
-        descIn,
-        'descError',
-        'Description is required.'
-      );
-
-      valid = false;
-
-    } else {
-
-      clearErr(
-        descIn,
-        'descError'
-      );
-    }
-
-
-    if (
-      descIn?.value.length >
-      200
-    ) {
-
-      showErr(
-        descIn,
-        'descError',
-        'Description must be 200 characters or less.'
-      );
-
-      valid = false;
-    }
-
-
-    return valid;
-  }
-
-
-  function showErr(
-    el,
-    errId,
-    message
-  ) {
-
-    el?.classList.add('error');
-
-    const errorEl =
-      document.getElementById(errId);
-
-    if (errorEl) {
-
-      errorEl.textContent =
-        message;
-
-      errorEl.classList.add('visible');
-    }
-  }
-
-
-  function clearErr(
-    el,
-    errId
-  ) {
-
-    el?.classList.remove('error');
-
-    const errorEl =
-      document.getElementById(errId);
-
-    if (errorEl) {
-
-      errorEl.classList.remove('visible');
-    }
-  }
-
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // SAVE BLOG — CREATE + UPDATE
-  // ══════════════════════════════════════════════════════════════════════════
-
-  async function save(status) {
-
-    if (!validate()) {
       return;
     }
 
 
     const token =
-      localStorage.getItem('blogcraftToken');
+      getToken();
 
 
     if (!token) {
 
-      Toast?.show?.(
-        'Please login again to continue.',
-        'error'
-      );
-
-      setTimeout(
-        () => {
-          window.location.href =
-            'login.html';
-        },
-        1000
-      );
+      handleAuthFailure();
 
       return;
     }
 
 
-    const rawContent =
-      contentIn?.value.trim() || '';
-
-
-    const content =
-      rawContent
-        .split('\n\n')
-        .map(
-          paragraph =>
-            paragraph.trim()
-              ? `<p>${paragraph.replace(
-                /\n/g,
-                '<br>'
-              )}</p>`
-              : ''
-        )
-        .join('\n');
-
-
-    // Image
     const image =
-      imageBase64 ||
-      existing?.image ||
-      '';
+      getImageValue();
 
 
-    const blogData = {
+    /*
+     * Backend Blog model currently accepts:
+     * title, content, category, image
+     */
 
-      title:
-        titleIn.value.trim(),
+    const payload = {
 
-      content:
-        content ||
-        `<p>${descIn.value.trim()}</p>`,
+      title,
 
-      category:
-        categoryIn.value,
+      content,
 
-      image:
-        image
+      category,
+
+      image
     };
 
 
-    // Disable buttons
-    if (saveDraftBtn) {
-      saveDraftBtn.disabled = true;
-    }
-
-    if (publishBtn) {
-      publishBtn.disabled = true;
-    }
+    const isEditing =
+      Boolean(existing);
 
 
-    if (status === 'published') {
+    const url =
+      isEditing
+        ? `${DASHBOARD_API_BASE_URL}/blogs/${encodeURIComponent(existing.id)}`
+        : `${DASHBOARD_API_BASE_URL}/blogs`;
 
-      if (publishBtn) {
-        publishBtn.textContent =
-          existing
-            ? 'Updating...'
-            : 'Publishing...';
-      }
 
-    } else {
+    const method =
+      isEditing
+        ? "PUT"
+        : "POST";
 
-      if (saveDraftBtn) {
-        saveDraftBtn.textContent =
-          existing
-            ? 'Updating...'
-            : 'Saving...';
-      }
-    }
+
+    const button =
+      status === "draft"
+        ? saveDraftBtn
+        : publishBtn;
+
+
+    setSavingState(
+      true,
+      button
+    );
 
 
     try {
 
-      /*
-       * IMPORTANT:
-       *
-       * Create:
-       * POST /api/blogs
-       *
-       * Edit:
-       * PUT /api/blogs/:id
-       */
-
-      const isEdit =
-        Boolean(editId);
-
-
-      const endpoint =
-        isEdit
-          ? `${DASHBOARD_API_BASE_URL}/blogs/${encodeURIComponent(editId)}`
-          : `${DASHBOARD_API_BASE_URL}/blogs`;
-
-
-      const method =
-        isEdit
-          ? 'PUT'
-          : 'POST';
-
-
-      console.log(
-        `Blog ${isEdit ? 'update' : 'create'} request:`,
-        method,
-        endpoint
-      );
-
-
       const response =
         await fetch(
-          endpoint,
+          url,
           {
-            method: method,
+            method,
 
             headers: {
 
-              'Content-Type':
-                'application/json',
+              "Content-Type":
+                "application/json",
 
-              'Authorization':
+              Authorization:
                 `Bearer ${token}`
             },
 
             body:
               JSON.stringify(
-                blogData
+                payload
               )
           }
         );
 
 
-      const data =
-        await response.json();
-
-
-      // Auth error
       if (
-        response.status === 401 ||
-        response.status === 403
+        response.status ===
+        401
       ) {
 
-        localStorage.removeItem(
-          'blogcraftToken'
-        );
-
-        Toast?.show?.(
-          'Your session has expired. Please login again.',
-          'error',
-          5000
-        );
-
-        setTimeout(
-          () => {
-            window.location.href =
-              'login.html';
-          },
-          1200
-        );
+        handleAuthFailure();
 
         return;
       }
 
 
-      // Backend error
+      const data =
+        await response
+          .json()
+          .catch(
+            () => ({})
+          );
+
+
       if (!response.ok) {
 
-        Toast?.show?.(
+        throw new Error(
           data.message ||
-          (
-            isEdit
-              ? 'Failed to update article.'
-              : 'Failed to create article.'
-          ),
-          'error',
-          5000
+          `HTTP ${response.status}`
         );
-
-        return;
       }
 
 
-      // ════════════════════════════════════════════════════════════════
-      // SAVE BACKEND RESPONSE LOCALLY
-      // ════════════════════════════════════════════════════════════════
+      /*
+       * Keep local ContentDB synchronized
+       * when available.
+       */
 
-      if (data.blog) {
+      if (
+        window.ContentDB &&
+        typeof ContentDB.saveContent ===
+        "function"
+      ) {
 
-        const localArticle = {
+        try {
 
-          id:
-            data.blog._id ||
-            editId ||
-            `c_${Date.now()}`,
+          const backendBlog =
+            data.blog ||
+            data.article ||
+            data;
 
-          title:
-            data.blog.title,
 
-          category:
-            data.blog.category,
+          const normalized =
+            normalizeDashboardBlog(
+              backendBlog,
+              user
+            );
 
-          description:
-            descIn.value.trim(),
 
-          content:
-            data.blog.content,
+          ContentDB.saveContent({
 
-          tags:
-            [...tags],
+            id:
+              normalized.id,
 
-          image:
-            data.blog.image ||
+            title,
+
+            category,
+
+            description,
+
+            content,
+
+            tags:
+              [...selectedTags],
+
             image,
 
-          author:
-            user.name,
+            author:
+              user.name ||
+              "BlogCraft Author",
 
-          authorInitials:
-            user.initials ||
-            'U',
+            authorEmail:
+              user.email ||
+              "",
 
-          date:
-            data.blog.updatedAt ||
-            data.blog.createdAt ||
-            new Date().toISOString(),
+            date:
+              normalized.date ||
+              new Date().toISOString(),
 
-          status:
             status,
 
-          views:
-            existing?.views ||
-            0,
+            views:
+              normalized.views ||
+              0,
 
-          userId:
-            user.id
-        };
+            userId:
+              normalized.userId ||
+              user.id
 
+          });
 
-        if (
-          window.ContentDB &&
-          typeof ContentDB.saveContent === 'function'
-        ) {
+        } catch (error) {
 
-          ContentDB.saveContent(
-            localArticle
+          console.warn(
+            "ContentDB local save failed:",
+            error
           );
         }
       }
 
 
-      // Success message
-      if (isEdit) {
-
-        Toast?.show?.(
-          'Article updated successfully! 🎉',
-          'success'
-        );
-
-      } else if (status === 'published') {
-
-        Toast?.show?.(
-          'Article published successfully! 🎉',
-          'success'
-        );
-
-      } else {
-
-        Toast?.show?.(
-          'Draft saved successfully.',
-          'success'
-        );
-      }
-
-
-      // Return to dashboard
-      setTimeout(
-        () => {
-
-          window.location.href =
-            'dashboard.html';
-
-        },
-        1000
+      showToast(
+        isEditing
+          ? "Article updated successfully."
+          : "Article created successfully.",
+        "success"
       );
+
+
+      setTimeout(() => {
+
+        window.location.href =
+          "dashboard.html";
+
+      }, 500);
 
 
     } catch (error) {
 
       console.error(
-        `Blog ${editId ? 'update' : 'create'} API error:`,
+        "Save article error:",
         error
       );
 
-      Toast?.show?.(
-        'Unable to connect to the backend. Make sure the server is running.',
-        'error',
-        5000
+
+      showToast(
+        error.message ||
+        "Failed to save article.",
+        "error"
       );
 
 
     } finally {
 
-      if (saveDraftBtn) {
-
-        saveDraftBtn.disabled =
-          false;
-
-        saveDraftBtn.textContent =
-          existing
-            ? 'Save Changes'
-            : 'Save as Draft';
-      }
-
-
-      if (publishBtn) {
-
-        publishBtn.disabled =
-          false;
-
-        publishBtn.textContent =
-          existing
-            ? 'Update & Publish'
-            : 'Publish Article';
-      }
+      setSavingState(
+        false,
+        button
+      );
     }
   }
 
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // BUTTONS
-  // ══════════════════════════════════════════════════════════════════════════
+  /* =====================================================
+     SAVE DRAFT
+     ===================================================== */
 
-  saveDraftBtn?.addEventListener(
-    'click',
-    () => save('draft')
-  );
+  if (saveDraftBtn) {
+
+    saveDraftBtn.addEventListener(
+      "click",
+      event => {
+
+        event.preventDefault();
+
+        saveArticle(
+          "draft"
+        );
+      }
+    );
+  }
 
 
-  publishBtn?.addEventListener(
-    'click',
-    () => save('published')
-  );
+  /* =====================================================
+     PUBLISH
+     ===================================================== */
+
+  if (publishBtn) {
+
+    publishBtn.addEventListener(
+      "click",
+      event => {
+
+        event.preventDefault();
+
+        saveArticle(
+          "published"
+        );
+      }
+    );
+  }
 
 
-  form?.addEventListener(
-    'submit',
+  /* =====================================================
+     FORM SUBMIT
+     ===================================================== */
+
+  form.addEventListener(
+    "submit",
     event => {
 
       event.preventDefault();
 
-      save(
-        statusIn?.value ||
-        'published'
+
+      saveArticle(
+        statusInput?.value ||
+        "published"
       );
     }
   );
-
-
-  initSidebar();
 }
 
 
-// ══════════════════════════════════════════════════════════════════════════════
-// INITIALIZE
-// ══════════════════════════════════════════════════════════════════════════════
+/* =========================================================
+   INITIALIZE
+   ========================================================= */
 
 document.addEventListener(
-  'DOMContentLoaded',
+  "DOMContentLoaded",
   () => {
 
     initDashboard();
