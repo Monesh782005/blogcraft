@@ -6,7 +6,7 @@
 
 'use strict';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = "https://blogcraft-lfmi.onrender.com/api";
 
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -402,7 +402,7 @@ function createUniqueImage(title, usedImages) {
   if (
     name === 'getting started with javascript' ||
     (name.includes('getting started') && name.includes('javascript') &&
-     !name.includes('modern javascript'))
+      !name.includes('modern javascript'))
   ) {
     const image = 'assets/images/article-javascript-backend.jpg';
     if (!usedImages.has(image)) return image;
@@ -424,7 +424,7 @@ function createUniqueImage(title, usedImages) {
     name === 'full-stack web developer' ||
     name === 'full stack web developer' ||
     (name.includes('full') && name.includes('stack') &&
-     name.includes('developer') && !name.includes('architecture'))
+      name.includes('developer') && !name.includes('architecture'))
   ) {
     const image = 'assets/images/article-fullstack-dev.jpg';
     if (!usedImages.has(image)) return image;
@@ -1696,7 +1696,7 @@ async function initDetailsPage() {
       heroImg.style.display =
         '';
 
-      heroImg.onerror = function() {
+      heroImg.onerror = function () {
         this.style.display = 'none';
         const hero = document.getElementById('detailsHero');
         if (hero) {
