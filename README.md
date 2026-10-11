@@ -26,7 +26,7 @@ BlogCraft is a responsive full-stack blogging platform developed as part of my i
 ## Project Links
 
 - **GitHub Repository:** https://github.com/Monesh782005/blogcraft
-- **Live Website:** Add your public Netlify URL here
+- **Live Website:** https://precious-douhua-ac6efe.netlify.app
 - **Backend API:** https://blogcraft-lfmi.onrender.com
 
 ## Run Locally
